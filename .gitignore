@@ -1,1 +1,4 @@
 zeus21_local_*
+build*
+*egg*
+*__pycache**
