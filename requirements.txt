@@ -1,0 +1,11 @@
+pytest
+numpy
+scipy
+sphinx
+myst_parser
+numexpr
+astropy
+tqdm
+matplotlib
+powerbox
+pyfftw
