@@ -15,9 +15,10 @@ class LineParams_Input:
                  OBSERVABLE_LIM = 'Inu', # observe intensity in Jy/sr or mK
                  _R = 0.5, # resolution for smoothing
                  sigma_LSFR = 0., # stochasticity in the L-SFR relation
-                 shot_noise = False, # add shot noise to the power spectrum
+                 shot_noise = False, # add shot noise to the LIM power spectrum
+
                  Eulerian = True, # Eulerian or Lagrangian space, MOVE TO USER PARAMS
-                 quadratic_lognormal = False # use 1st or 2nd order in the SFRD and line lognormal approximation MOVE TO USER PARAMS
+                 quadratic_lognormal = False, # use 1st or 2nd order in the SFRD and line lognormal approximation MOVE TO USER PARAMS
                  ):
         
         self.LINE = LINE
@@ -32,11 +33,12 @@ class LineParams_Input:
         self.quadratic_lognormal = quadratic_lognormal
 
 
+
 class Line_Parameters:
 
     "Class to pass the parameters of LIM as input"
 
-    def __init__(self, LineParams_Input):
+    def __init__(self, LineParams_Input, User_Parameters):
 
         self.LINE = LineParams_Input.LINE # which line to use 
         
@@ -51,9 +53,9 @@ class Line_Parameters:
         self.OBSERVABLE_LIM = LineParams_Input.OBSERVABLE_LIM
 
         # resolution in Mpc, cannot go below the Rmin defined in Cosmo_Params               
-        if LineParams_Input._R < 0.5:
-            print('Too small R, we  use instead MIN_R_NONLINEAR = 0.5 Mpc')
-            self._R = 0.5
+        if LineParams_Input._R < User_Parameters.MIN_R_NONLINEAR:
+            print('Too small R, we  use instead MIN_R_NONLINEAR')
+            self._R = User_Parameters.MIN_R_NONLINEAR
         else:
             self._R = LineParams_Input._R 
 

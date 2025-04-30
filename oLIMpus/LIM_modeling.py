@@ -47,7 +47,8 @@ class get_LIM_coefficients:
         rhoL_interp = sfrd.interpolate.interp1d(zLIM_longer, rhoL_avg_longer, kind = 'cubic', bounds_error = False, fill_value = 0,) 
 
         # in the z array of interest
-        self.rhoL_avg = rhoL_interp(self.zintegral)
+        self.rhoL_avg = rhoL_interp(self.zintegral) # Lagrangian ST
+        self.rhoL_bar = rhoL_interp(self.zintegral) # this will be converted to EPS and to Eulerian
 
     ### STEP 2: Broadcasted Prescription to compute gammas
 
@@ -114,12 +115,13 @@ class get_LIM_coefficients:
             gamma_LIM_Lagrangian = self.gamma_LIM-1.0
             if Line_Parameters.quadratic_lognormal: # !!! move this flag to User_Params
                 gamma2_LIM_Lagrangian = self.gamma2_LIM + 1/2.
+
                 _corrfactorEulerian_LIM = (1+(gamma_LIM_Lagrangian-2*gamma2_LIM_Lagrangian)*self.sigmaofRtab_LIM**2)/(1-2*gamma2_LIM_Lagrangian*self.sigmaofRtab_LIM**2)
 
             else:
                 _corrfactorEulerian_LIM = 1.0 + gamma_LIM_Lagrangian*self.sigmaofRtab_LIM**2
 
-            self.rhoL_avg *= _corrfactorEulerian_LIM
+            self.rhoL_bar *= _corrfactorEulerian_LIM
 
     ### STEP 4: Line Intensity Anisotropies
         if Line_Parameters.OBSERVABLE_LIM == 'Tnu':
@@ -139,8 +141,24 @@ class get_LIM_coefficients:
             self.coeff1_LIM = -1
 
         # this is the observed intensity
-        self.Inu_avg = self.coeff1_LIM * self.rhoL_avg
+        self.Inu_bar = self.coeff1_LIM * self.rhoL_bar
 
+        if Line_Parameters.shot_noise:
+
+            integrand_shot = P_shot_noise_integrand(False, Line_Parameters,Astro_Parameters, Cosmo_Parameters, HMF_interpolator, HMF_interpolator.Mhtab[np.newaxis,:], self.zintegral[:,np.newaxis])
+            
+            if Line_Parameters.OBSERVABLE_LIM == 'Tnu':
+
+                scale_power_spectrum = ((self.coeff1_LIM * u.uK * u.Mpc**3 / u.Lsun)**2*u.Lsun**2*u.Mpc**-3).to(u.Mpc**3 * u.Jy**2/u.steradian**2)
+            
+            elif Line_Parameters.OBSERVABLE_LIM == 'Inu':
+
+                scale_power_spectrum = (((self.coeff1_LIM*u.Jy/u.steradian/u.Lsun/u.Mpc**-3)**2)*u.Lsun**2*u.Mpc**-3).to(u.Mpc**3 * u.Jy**2/u.steradian**2)
+            
+            self.shot_noise = scale_power_spectrum.value * np.trapezoid(integrand_shot, HMF_interpolator.logtabMh, axis = 1) 
+
+            if Line_Parameters.Eulerian:
+                self.shot_noise *= _corrfactorEulerian_LIM**2
 
 
 ### ---------------------- ###
@@ -154,9 +172,26 @@ def rhoL_integrand(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
 
     Ltab_curr = LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HMF_interpolator, Mh, z) 
 
-    integrand_LIM = HMF_curr * Ltab_curr * Mh # in Lsun / Mpc3 
+    integrand_LIM = HMF_curr * Ltab_curr * Mh # in Lsun / Mpc3
 
     return integrand_LIM
+
+
+def P_shot_noise_integrand(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HMF_interpolator, massVector, z):
+    "Integrand to compute the average line luminosity density"
+
+    Mh = massVector # in Msun
+
+    HMF_curr = np.exp(HMF_interpolator.logHMFint((np.log(Mh), z))) # in Mpc-3 
+
+    dMdlogM = Mh
+    dndlogM = HMF_curr * dMdlogM
+
+    Ltab_curr = LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HMF_interpolator, Mh, z) 
+
+    integrand_P_shot_noise = dndlogM**-1 * (dndlogM * Ltab_curr)**2  # units Lsun2 Mpc-3 because of the delta Dirac ? 
+
+    return integrand_P_shot_noise
 
 
 ### ---------------------- ###
