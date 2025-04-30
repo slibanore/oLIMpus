@@ -105,7 +105,26 @@ class Power_Spectra_LIM:
             self.P_shot_noise = 0.
             self._Pk_LIM_tot = self._Pk_LIM
 
+    ### STEP 5: add RSD 
+        if(self.RSD_MODE==0): #no RSD (real space)
+            mu2 = 0. #nothing to change
+        elif(self.RSD_MODE==1): #spherically avg'd RSD
+            mu2 = constants.MU_AVG**2 
+        elif(self.RSD_MODE==2): #LoS RSD (mu=1)
+            mu2 = constants.MU_LoS**2 
+        else:
+            print('Error, have to choose an RSD mode! RSD_MODE')
 
+        if Line_Parameters.quadratic: # !! move to User_params
+            linear_bias = LIM_coeff.gamma_LIM / np.sqrt(1.-2*LIM_coeff.gamma2_LIM * LIM_coeff.sigmaofRtab_LIM**2)
+        else:
+            linear_bias = LIM_coeff.gamma_LIM
+
+        dzlist = LIM_coeff.zintegral*0.001 
+        # f(z) = dln D(d)/dln a = dln D(z) / dz * (dz/dln a)
+        growth_rate = - (1.+LIM_coeff.zintegral) * (np.log(cosmology.growth(Cosmo_Parameters, LIM_coeff.zintegral+dzlist))-np.log(cosmology.growth(Cosmo_Parameters, LIM_coeff.zintegral-dzlist)))/(2.0*dzlist) 
+
+        self._Pk_LIM_tot *= (1. + growth_rate * mu2 / linear_bias)**2
 
     # --- #
     # define LIM window    
