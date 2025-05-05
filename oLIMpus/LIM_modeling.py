@@ -116,7 +116,7 @@ class get_LIM_coefficients:
             if Line_Parameters.quadratic_lognormal: # !!! move this flag to User_Params
                 gamma2_LIM_Lagrangian = self.gamma2_LIM + 1/2.
 
-                _corrfactorEulerian_LIM = (1+(gamma_LIM_Lagrangian-2*gamma2_LIM_Lagrangian)*self.sigmaofRtab_LIM**2)/(1-2*gamma2_LIM_Lagrangian*self.sigmaofRtab_LIM**2)
+                _corrfactorEulerian_LIM = (1.+(gamma_LIM_Lagrangian-2*gamma2_LIM_Lagrangian)*self.sigmaofRtab_LIM**2)/(1.-2*gamma2_LIM_Lagrangian*self.sigmaofRtab_LIM**2)
 
             else:
                 _corrfactorEulerian_LIM = 1.0 + gamma_LIM_Lagrangian*self.sigmaofRtab_LIM**2
@@ -249,7 +249,22 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
     if Line_Parameters.sigma_LSFR == 0.:
         L_of_Mh = 10.**log10_L
     else:
-        print('\nSTOCHASTICITY TO BE IMPLEMENTED')
-        return -1
+        log10_muL = log10_L
+        log10_muL[abs(log10_L) == np.inf] = 0.
+
+        sigma_L = Line_Parameters.sigma_LSFR
+        if len(log10_muL.shape) == 2:
+            Lval = np.logspace(-5,15,203)[:,np.newaxis,np.newaxis]
+        elif len(log10_muL.shape) == 3:
+            Lval = np.logspace(-5,15,203)
+
+        coef = 1/(np.sqrt(2*np.pi)*sigma_L)[:,np.newaxis,np.newaxis,np.newaxis]
+
+        # lognormal distribution
+        p_logL =  coef * np.exp(- (np.log10(Lval)-np.log10_muL[np.newaxis,:])**2/(2*(sigma_L)**2))
+        p_logL = np.where(np.isnan(p_logL), 0, p_logL)
+        p_logL[p_logL < 1e-30] = 0.
+
+        L_of_Mh = sfrd.simpson(p_logL / np.log(10), Lval, axis=0)
 
     return L_of_Mh

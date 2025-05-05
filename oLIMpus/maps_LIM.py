@@ -7,14 +7,15 @@ BGU - April 2025
 import numpy as np 
 import powerbox as pbox
 from scipy.interpolate import interp1d
-from oLIMpus import z21_utilities, sfrd, LineLuminosity
+from oLIMpus import z21_utilities, sfrd, LineLuminosity, CoevalMaps, BMF, cosmology
+from oLIMpus.zeus21_local_sarah.zeus21.maps import reionization_maps as reio
 import numexpr as ne 
 
 class CoevalBox_LIM_analytical:
     "Class that calculates and keeps coeval maps, one z at a time."
     "The computation is done analytically based on the estimated density and LIM power spectra"
 
-    def __init__(self, LIM_coeff, LIM_corr, LIM_Power_Spectrum, Line_Parameters, z, Lbox=600, Nbox=200, seed=1605):
+    def __init__(self, LIM_coeff, LIM_corr, LIM_Power_Spectrum, Line_Parameters, z, input_Resolution, Lbox=600, Nbox=200, seed=1605):
 
         zlist = LIM_coeff.zintegral 
         _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
@@ -26,6 +27,12 @@ class CoevalBox_LIM_analytical:
 
         self.Inu_bar = LIM_coeff.Inu_bar[_iz]
         klist = LIM_Power_Spectrum.klist_PS
+
+        sphere_FACTOR = 0.620350491
+        Resolution = max(input_Resolution, Line_Parameters._R, sphere_FACTOR * Lbox/Nbox)
+        if Resolution != input_Resolution:
+            print('The resolution cannot be smaller than R and Lbox/Nbox')
+            print('Smoothing R changed to ' + str(Resolution))
 
         # Produce density box
         Pm = np.outer(LIM_Power_Spectrum.lin_growth**2, LIM_corr._PklinCF) [_iz,:]
@@ -40,15 +47,15 @@ class CoevalBox_LIM_analytical:
             seed = self.seed,
         )
 
-        self.delta_box = pb.delta_x() # density box
+        self.density_box = pb.delta_x() # density box
 
         # scale the density box to the lognormal intensity
         # !! should go to the User_Params
         if Line_Parameters.quadratic_lognormal:
-            lognormal_nu_box = np.exp(LIM_coeff.gamma_LIM[_iz] * self.delta_box + LIM_coeff.gamma2_LIM[_iz] * self.delta_box**2 )
+            lognormal_nu_box = np.exp(LIM_coeff.gamma_LIM[_iz] * self.density_box + LIM_coeff.gamma2_LIM[_iz] * self.density_box**2 )
         
         else:
-            lognormal_nu_box = np.exp(LIM_coeff.gamma_LIM[_iz] * self.delta_box) 
+            lognormal_nu_box = np.exp(LIM_coeff.gamma_LIM[_iz] * self.density_box) 
 
         # rescale the mean so to make it Eulerian
         self.Inu_box_noiseless = self.Inu_bar * lognormal_nu_box / np.mean(lognormal_nu_box)
@@ -76,16 +83,18 @@ class CoevalBox_LIM_analytical:
         # smooth the box over R 
         klistfftx = np.fft.fftfreq(self.Inu_box.shape[0],Lbox/Nbox)*2*np.pi
         klist3Dfft = np.sqrt(np.sum(np.meshgrid(klistfftx**2, klistfftx**2, klistfftx**2, indexing='ij'), axis=0))
+        Inu_noiseless_fft = np.fft.fftn(self.Inu_box_noiseless)
         Inu_fft = np.fft.fftn(self.Inu_box)
 
-        self.Inu_box_smooth = np.array(z21_utilities.tophat_smooth(Line_Parameters._R, klist3Dfft, Inu_fft))
+        self.Inu_box_noiseless_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, Inu_noiseless_fft))
+        self.Inu_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, Inu_fft))
 
 
 
 class CoevalBox_percell:
     "Produce maps by computing the LIM signal cell by cell"
 
-    def __init__(self, LIM_coeff, LIM_corr, LIM_Power_Spectrum, Zeus_coeff, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HMF_interpolator, z, Lbox=600, Nbox=200, seed=1605):
+    def __init__(self, LIM_coeff, LIM_corr, LIM_Power_Spectrum, Zeus_coeff, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HMF_interpolator, z, input_Resolution, Lbox=600, Nbox=200, seed=1605):
 
         zlist = LIM_coeff.zintegral 
         _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
@@ -97,29 +106,29 @@ class CoevalBox_percell:
 
         self.Inu_bar = LIM_coeff.Inu_bar[_iz]
 
+        # check 
+        sphere_FACTOR = 0.620350491
+        Resolution = max(input_Resolution, Line_Parameters._R, sphere_FACTOR * Lbox/Nbox)
+        if Resolution != input_Resolution:
+            print('The resolution cannot be smaller than R and Lbox/Nbox')
+            print('Smoothing R changed to ' + str(Resolution))
+
         # get density box 
-        density_box = CoevalBox_LIM_analytical(LIM_coeff, LIM_corr, LIM_Power_Spectrum, Line_Parameters, z, Lbox, Nbox, seed).delta_box
-
-        # smooth the density over R
-        klistfftx = np.fft.fftfreq(density_box.shape[0],Lbox/Nbox)*2*np.pi
-        klist3Dfft = np.sqrt(np.sum(np.meshgrid(klistfftx**2, klistfftx**2, klistfftx**2, indexing='ij'), axis=0))
-        density_fft = np.fft.fftn(density_box)
-
-        smooth_density_fields_cell = (np.array(z21_utilities.tophat_smooth(Line_Parameters._R, klist3Dfft, density_fft))).flatten()
+        density_box_3d = CoevalBox_LIM_analytical(LIM_coeff, LIM_corr, LIM_Power_Spectrum, Line_Parameters, self.z, Resolution, Lbox, Nbox, seed).density_box
+        density_box = density_box_3d.flatten()
 
         # compute the local dndM through EPS and HMF
-        deltaArray = ne.evaluate('smooth_density_fields_cell')
+        deltaArray = ne.evaluate('density_box')
 
         delta_crit_ST = Cosmo_Parameters.delta_crit_ST
         a_corr_EPS = Cosmo_Parameters.a_corr_EPS
 
-        variance = np.var(smooth_density_fields_cell)
-        self.smooth_delta_box = smooth_density_fields_cell.reshape(Nbox,Nbox,Nbox)
+        variance = np.var(density_box)
         sigmaR = ne.evaluate('sqrt(variance)')
 
         mArray, deltaArray_Mh = np.meshgrid(HMF_interpolator.Mhtab, deltaArray, indexing = 'ij', sparse = True)
 
-        sigmaM = HMF_interpolator.sigmaintlog((np.log(mArray),z))
+        sigmaM = HMF_interpolator.sigmaintlog((np.log(mArray),self.z))
 
         modSigmaSq = ne.evaluate('sigmaM*sigmaM - sigmaR*sigmaR')
         indexTooBig = (modSigmaSq <= 0.0)
@@ -134,11 +143,11 @@ class CoevalBox_percell:
         EPS_HMF_corr = ne.evaluate('(nu/nu0) * (sigmaM/modSigma)* (sigmaM/modSigma) * exp(-a_corr_EPS * (nu*nu-nu0*nu0)/2. )')
         #print('Done EPS corr in ' + str(time.time() - start))
 
-        HMF_curr = np.exp(HMF_interpolator.logHMFint((np.log(mArray),z)))
+        HMF_curr = np.exp(HMF_interpolator.logHMFint((np.log(mArray),self.z)))
 
         # ---- #
         # produce SFRD box
-        SFRtab_currII = sfrd.SFR_II(Astro_Parameters, Cosmo_Parameters, HMF_interpolator, mArray, z, z)
+        SFRtab_currII = sfrd.SFR_II(Astro_Parameters, Cosmo_Parameters, HMF_interpolator, mArray, self.z, self.z)
 
         integrand = EPS_HMF_corr *  HMF_curr * SFRtab_currII * HMF_interpolator.Mhtab[:,np.newaxis]
 
@@ -150,13 +159,13 @@ class CoevalBox_percell:
         SFRDbox_Lagrangian_flattened = ne.evaluate('mean_SFRD_theory/mean_SFRD_numerical * SFRDbox_flattend')
 
         if Line_Parameters.Eulerian: # !!! move to user_params
-            SFRDbox_flattend_scaled = ne.evaluate('SFRDbox_Lagrangian_flattened * (1+smooth_density_fields_cell)')
+            SFRDbox_flattend_scaled = ne.evaluate('SFRDbox_Lagrangian_flattened * (1+density_box)')
         else:
             SFRDbox_flattend_scaled = SFRDbox_Lagrangian_flattened
 
         self.SFRD_box = SFRDbox_flattend_scaled.reshape(Nbox,Nbox,Nbox)
 
-        integrand_LIM = EPS_HMF_corr * HMF_curr * LineLuminosity(SFRtab_currII, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HMF_interpolator, mArray, z)  * HMF_interpolator.Mhtab[:,np.newaxis]
+        integrand_LIM = EPS_HMF_corr * HMF_curr * LineLuminosity(SFRtab_currII, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HMF_interpolator, mArray, self.z)  * HMF_interpolator.Mhtab[:,np.newaxis]
 
         # ---- #
         # LIM box
@@ -168,14 +177,14 @@ class CoevalBox_percell:
         rhoLbox_Lagrangian_flattened = ne.evaluate('mean_rhoL_theory/mean_rhoL_numerical * rhoLbox_flattened')
          
         if Line_Parameters.Eulerian:
-            rhoLbox_flattend_scaled = ne.evaluate('rhoLbox_Lagrangian_flattened * (1+smooth_density_fields_cell)')
+            rhoLbox_flattend_scaled = ne.evaluate('rhoLbox_Lagrangian_flattened * (1+density_box)')
         else:
             rhoLbox_flattend_scaled = rhoLbox_Lagrangian_flattened
 
-        rhoL_box = rhoLbox_flattend_scaled.reshape(Nbox,Nbox,Nbox)
+        self.rhoL_box = rhoLbox_flattend_scaled.reshape(Nbox,Nbox,Nbox)
 
         # get observed box 
-        self.Inu_box_noiseless = rhoL_box * LIM_coeff.coeff1_LIM[_iz] 
+        self.Inu_box_noiseless = self.rhoL_box * LIM_coeff.coeff1_LIM[_iz] 
 
         # create shot noise box -- SAME AS ANALYTICAL !!! 
         if Line_Parameters.shot_noise:
@@ -196,3 +205,59 @@ class CoevalBox_percell:
 
         # LIM box with shot noise
         self.Inu_box = self.Inu_box_noiseless + self.shotnoise_box
+
+        # smooth the box over R 
+        klistfftx = np.fft.fftfreq(self.Inu_box.shape[0],Lbox/Nbox)*2*np.pi
+        klist3Dfft = np.sqrt(np.sum(np.meshgrid(klistfftx**2, klistfftx**2, klistfftx**2, indexing='ij'), axis=0))
+        rhoL_fft = np.fft.fftn(self.rhoL_box)
+        Inu_noiseless_fft = np.fft.fftn(self.Inu_box_noiseless)
+        Inu_fft = np.fft.fftn(self.Inu_box)
+
+        self.rhoL_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, rhoL_fft))
+        self.Inu_box_noiseless_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, Inu_noiseless_fft))
+        self.Inu_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, Inu_fft))
+
+        self.density_box = density_box_3d
+
+
+
+class CoevalBox_T21reionization:
+    "Re-build the 21cm temperature map combining the xalpha, Tk and delta for more stability in the non-linear fluctuation computation. Include the xH contribution"
+
+    def __init__(self, zeus_coeff, zeus_corr, zeus_pk, Astro_Parameters, Cosmo_Parameters, ClassyCosmo, HMF_interpolator, z, Lbox=600, Nbox=200, seed=1605, MAP_T21_FULL = True, mass_weighted_xHII=False):
+
+        zlist = zeus_coeff.zintegral 
+        _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
+        
+        BMF_val = BMF(zeus_coeff, HMF_interpolator, Cosmo_Parameters, Astro_Parameters, R_linear_sigma_fit_input=10, FLAG_converge=True, max_iter=10, ZMAX_REION = 30)
+
+        reionization_map = reio(Cosmo_Parameters, ClassyCosmo, zeus_corr, zeus_coeff, BMF_val, zeus_coeff.zintegral, 
+                 input_boxlength=Lbox, ncells=Nbox, seed=seed, r_precision=1., barrier=None, 
+                 PRINT_TIMER=False, ENFORCE_BMF_SCALE=False, 
+                 LOGNORMAL_DENSITY=False, COMPUTE_DENSITY_AT_ALLZ=False, SPHERIZE=False, 
+                 COMPUTE_MASSWEIGHTED_IONFRAC=mass_weighted_xHII, lowres_massweighting=1)
+        
+        if mass_weighted_xHII:
+            self.xH_avg_map = 1.-reionization_map.ion_frac[_iz]
+        else:
+            self.xH_avg_map = 1-reionization_map.ion_frac_massweighted[_iz]
+        
+        self.xH_map = 1. - reionization_map.ion_field_allz[_iz]
+
+        if MAP_T21_FULL:
+
+            zeus_box = CoevalMaps(zeus_coeff, zeus_pk, z, Lbox, Nbox, KIND=1, seed=seed)
+
+            self.T21_map_only = zeus_box.T21map
+            self.T21_map_only /= zeus_coeff.xHI_avg[_iz]
+        
+ 
+        else:
+            print('T21 by ingredients not yet implemented') 
+            # self.xa_map = 
+            # self.invTcol_map = 
+
+            self.T21_map_only = cosmology.T021(Cosmo_Parameters,zeus_coeff.zintegral) * self.xa_map/(1.0 + self.xa_map) * (1.0 - zeus_coeff.T_CMB * (self.invTcol_map)) 
+
+        self.T21_map_only *= self.xH_avg_map 
+        self.T21_map = self.T21_map_only * self.xH_map
