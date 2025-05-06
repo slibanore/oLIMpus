@@ -35,15 +35,19 @@ CosmoParams_input_fid = dict(
 AstroParams_input_fid = dict(
         astromodel = 0, 
         accretion_model = 0,
-        alphastar = 0.5,
-        betastar = -0.5,
-        epsstar = 0.1,
-        Mc = 3e11,
-        dlog10epsstardz = 0.0,
+        # values from 2306.09403
+        alphastar = 0.61,
+        betastar = -1.91,
+        epsstar = 0.1, # pivot at z = 8
+        Mc = 10**12.03,
+        dlog10epsstardz = -0.0467,
 
-        fesc10 = 0.1,
-        alphaesc = 0.0,
-        L40_xray = 3.0,
+        # we fix these values to get fduty == 1
+        Mturn_fixed = 1e-10,
+
+        #fesc10 = 0.1,
+        alphaesc = -0.5,
+        #L40_xray = 3.0,
 
         USE_POPIII = False, 
         USE_LW_FEEDBACK = False, 

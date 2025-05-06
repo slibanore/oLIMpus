@@ -10,6 +10,9 @@ from scipy.interpolate import interp1d
 from oLIMpus import z21_utilities, sfrd, LineLuminosity, CoevalMaps, BMF, cosmology
 from oLIMpus.zeus21_local_sarah.zeus21.maps import reionization_maps as reio
 import numexpr as ne 
+from scipy.interpolate import InterpolatedUnivariateSpline as spline
+from tqdm import trange
+
 
 class CoevalBox_LIM_analytical:
     "Class that calculates and keeps coeval maps, one z at a time."
@@ -231,18 +234,18 @@ class CoevalBox_T21reionization:
         
         BMF_val = BMF(zeus_coeff, HMF_interpolator, Cosmo_Parameters, Astro_Parameters, R_linear_sigma_fit_input=10, FLAG_converge=True, max_iter=10, ZMAX_REION = 30)
 
-        reionization_map = reio(Cosmo_Parameters, ClassyCosmo, zeus_corr, zeus_coeff, BMF_val, zeus_coeff.zintegral, 
+        reionization_map_binary = reio(Cosmo_Parameters, ClassyCosmo, zeus_corr, zeus_coeff, BMF_val, zeus_coeff.zintegral, 
                  input_boxlength=Lbox, ncells=Nbox, seed=seed, r_precision=1., barrier=None, 
                  PRINT_TIMER=False, ENFORCE_BMF_SCALE=False, 
-                 LOGNORMAL_DENSITY=False, COMPUTE_DENSITY_AT_ALLZ=False, SPHERIZE=False, 
+                 LOGNORMAL_DENSITY=False, COMPUTE_DENSITY_AT_ALLZ=True, SPHERIZE=False, 
                  COMPUTE_MASSWEIGHTED_IONFRAC=mass_weighted_xHII, lowres_massweighting=1)
         
-        if mass_weighted_xHII:
-            self.xH_avg_map = 1.-reionization_map.ion_frac[_iz]
-        else:
-            self.xH_avg_map = 1-reionization_map.ion_frac_massweighted[_iz]
+        reionization_map_partial, ion_frac_withpartial = partial_ionize(reionization_map_binary.density_allz, reionization_map_binary.ion_field_allz, BMF_val, Cosmo_Parameters,0, mass_weighted_xHII)
+
+        self.ion_frac = ion_frac_withpartial
+        self.xH_avg_map = 1. - self.ion_frac[_iz]
         
-        self.xH_map = 1. - reionization_map.ion_field_allz[_iz]
+        self.xH_box = 1. - reionization_map_partial[_iz]
 
         if MAP_T21_FULL:
 
@@ -260,4 +263,23 @@ class CoevalBox_T21reionization:
             self.T21_map_only = cosmology.T021(Cosmo_Parameters,zeus_coeff.zintegral) * self.xa_map/(1.0 + self.xa_map) * (1.0 - zeus_coeff.T_CMB * (self.invTcol_map)) 
 
         self.T21_map_only *= self.xH_avg_map 
-        self.T21_map = self.T21_map_only * self.xH_map
+        self.T21_map = self.T21_map_only * self.xH_box
+
+
+# !!! towards better model for reionization
+def partial_ionize(dfield, ifield, BMF_class, CosmoParams, ir, mass_weighted_xHII):
+    ifield_full = np.empty(ifield.shape)
+    sample_delta = np.linspace(-5, 5, 201)
+    
+    for i in trange(ifield.shape[0]):
+        nions = BMF_class.nion_delta_r_int(CosmoParams, sample_delta, ir).T[i]
+        nrecs = BMF_class.nrec(CosmoParams, sample_delta, BMF_class.ion_frac).T[i]
+        partial_ifield_spl = spline(sample_delta, nions/(1+nrecs))
+        ifield_full[i] = np.clip(ifield[i] + partial_ifield_spl(dfield[i]), 0, 1)
+
+    if mass_weighted_xHII:
+        ion_frac_withpartial = np.average((1+dfield) * ifield_full, axis=(1, 2, 3))
+    else:
+        ion_frac_withpartial = np.average(ifield_full, axis=(1, 2, 3))
+
+    return ifield_full, ion_frac_withpartial

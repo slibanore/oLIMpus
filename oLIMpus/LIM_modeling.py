@@ -223,6 +223,8 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
     elif Line_Parameters.LINE_MODEL == 'Yang24':
         if Line_Parameters.LINE == 'OIII':
             line_dict = inputs_LIM.Yang24_OIII_params
+        elif Line_Parameters.LINE == 'OII':
+            line_dict = inputs_LIM.Yang24_OII_params
         elif Line_Parameters.LINE == 'Ha':
             line_dict = inputs_LIM.Yang24_Ha_params
         elif Line_Parameters.LINE == 'Hb':
@@ -239,6 +241,40 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
         L_line = 2. * N * dotM / ((dotM / SFR1)**(-alpha) + (dotM / SFR1)**beta)
 
         log10_L = np.log10(L_line)
+
+    # from arXiv:2111.02411
+    elif Line_Parameters.LINE_MODEL == 'THESAN21':
+        if Line_Parameters.LINE == 'OIII':
+            line_dict = inputs_LIM.THESAN21_OIII_params
+        elif Line_Parameters.LINE == 'Ha':
+            line_dict = inputs_LIM.THESAN21_OII_params
+        elif Line_Parameters.LINE == 'Ha':
+            line_dict = inputs_LIM.THESAN21_Ha_params
+        elif Line_Parameters.LINE == 'Hb':
+            line_dict = inputs_LIM.THESAN21_Hb_params
+        else:
+            print('\nLINE NOT IMPLEMENTED YET IN THESAN21')
+            return -1
+
+        a = line_dict['a']
+        ma = line_dict['ma']
+        mb = line_dict['mb']
+        log10_SFR_b = line_dict['log10_SFR_b']
+        mc = line_dict['mc']
+        log10_SFR_c = line_dict['log10_SFR_c']
+
+        log10_SFR = np.log10(dotM)
+
+        log10_L = np.empty_like(log10_SFR)
+
+        cond1 = log10_SFR < log10_SFR_b
+        cond2 = (log10_SFR >= log10_SFR_b) & (log10_SFR < log10_SFR_c)
+        cond3 = log10_SFR >= log10_SFR_c
+
+        log10_L[cond1] = a + ma * log10_SFR[cond1]
+        log10_L[cond2] = a + (ma - mb) * log10_SFR_b + mb * log10_SFR[cond2]
+        log10_L[cond3] = a + (ma - mb) * log10_SFR_b + (mb - mc) * log10_SFR_c + mc * log10_SFR[cond3]
+
 
     else:
         print('\nLINE MODEL NOT IMPLEMENTED YET')

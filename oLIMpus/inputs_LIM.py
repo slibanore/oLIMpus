@@ -78,6 +78,13 @@ Yang24_OIII_params = {
         'SFR1': 1.24e2,
         }
 
+Yang24_OII_params = {
+        'alpha': -2.43e-1,
+        'beta': 2.5,
+        'N': 2.14e6,
+        'SFR1': 5.91e1,
+        }
+
 Yang24_Ha_params = {
         'alpha': 9.94e-3,
         'beta': 5.25e-1,
@@ -91,3 +98,36 @@ Yang24_Hb_params = {
         'N': 1.61e7,
         'SFR1': 1.74e1,
         }
+
+
+THESAN21_OIII_params = {'a': 7.84,
+    'ma': 1.24,
+    'mb': 1.19,
+    'log10_SFR_b': 0.,
+    'mc': 0.53, 
+    'log10_SFR_c': 0.66, 
+    }
+
+THESAN21_OII_params = {'a': 7.08,
+    'ma': 1.11,
+    'mb': 1.31,
+    'log10_SFR_b': 0.,
+    'mc': 0.64, 
+    'log10_SFR_c': 0.54, 
+    }
+
+THESAN21_Ha_params = {'a': 8.08,
+    'ma': 0.96,
+    'mb': 0.88,
+    'log10_SFR_b': 0.,
+    'mc': 0.45, 
+    'log10_SFR_c': 0.96, 
+    }
+
+THESAN21_Hb_params = {'a': 7.62,
+    'ma': 0.96,
+    'mb': 0.86,
+    'log10_SFR_b': 0.,
+    'mc': 0.41, 
+    'log10_SFR_c': 0.96, 
+    }
