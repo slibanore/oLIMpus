@@ -14,7 +14,7 @@ class LineParams_Input:
                  LINE_MODEL = 'SFRD', # model of the line luminosity
                  OBSERVABLE_LIM = 'Inu', # observe intensity in Jy/sr or mK
                  _R = 0.5, # resolution for smoothing
-                 sigma_LSFR = 0., # stochasticity in the L-SFR relation
+                 sigma_LMh = 0., # stochasticity in the L-Mh relation
                  shot_noise = False, # add shot noise to the LIM power spectrum
 
                  Eulerian = True, # Eulerian or Lagrangian space, MOVE TO USER PARAMS
@@ -25,7 +25,7 @@ class LineParams_Input:
         self.OBSERVABLE_LIM = OBSERVABLE_LIM
         self._R = _R
         self.LINE_MODEL = LINE_MODEL
-        self.sigma_LSFR = sigma_LSFR
+        self.sigma_LMh = sigma_LMh
         self.shot_noise = shot_noise
 
         # !!! move to User_Params
@@ -60,7 +60,7 @@ class Line_Parameters:
             self._R = LineParams_Input._R 
 
         self.LINE_MODEL = LineParams_Input.LINE_MODEL 
-        self.sigma_LSFR = LineParams_Input.sigma_LSFR 
+        self.sigma_LMh = LineParams_Input.sigma_LMh
         self.shot_noise = LineParams_Input.shot_noise
 
         # !!! move to User_Params

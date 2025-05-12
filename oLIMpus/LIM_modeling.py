@@ -11,6 +11,7 @@ from oLIMpus import inputs_LIM
 import numpy as np 
 import astropy.units as u 
 import astropy.constants as cu 
+from scipy.integrate import simpson
 
 # Define the coefficients to be used in the LIM auto spectra computation; zmin is down to which the computation is performed
 class get_LIM_coefficients:
@@ -282,25 +283,28 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
 
     # --- #
     # stochasticity computation
-    if Line_Parameters.sigma_LSFR == 0.:
+    if Line_Parameters.sigma_LMh == 0.:
         L_of_Mh = 10.**log10_L
     else:
-        log10_muL = log10_L
-        log10_muL[abs(log10_L) == np.inf] = 0.
 
-        sigma_L = Line_Parameters.sigma_LSFR
-        if len(log10_muL.shape) == 2:
-            Lval = np.logspace(-5,15,203)[:,np.newaxis,np.newaxis]
-        elif len(log10_muL.shape) == 3:
-            Lval = np.logspace(-5,15,203)
+        sigma_L = Line_Parameters.sigma_LMh
+        log_muL = np.log(10**log10_L) 
+        log_muL[abs(log10_L) == np.inf] = 0.
 
-        coef = 1/(np.sqrt(2*np.pi)*sigma_L)[:,np.newaxis,np.newaxis,np.newaxis]
+        if len(log_muL.shape) == 2 or len(log_muL.shape) == 1:
+            Lval = np.logspace(-50,20,503)[:,np.newaxis,np.newaxis]
+        elif len(log_muL.shape) == 3:
+            Lval = np.logspace(-50,20,503)[:,np.newaxis,np.newaxis,np.newaxis]
+
+        coef = 1/(np.sqrt(2*np.pi)*sigma_L*Lval)
 
         # lognormal distribution
-        p_logL =  coef * np.exp(- (np.log10(Lval)-np.log10_muL[np.newaxis,:])**2/(2*(sigma_L)**2))
-        p_logL = np.where(np.isnan(p_logL), 0, p_logL)
-        p_logL[p_logL < 1e-30] = 0.
 
-        L_of_Mh = sfrd.simpson(p_logL / np.log(10), Lval, axis=0)
+        p_logL =  coef * np.exp(- (np.log(Lval)-log_muL[np.newaxis,:])**2/(2*(sigma_L)**2))
+        p_logL = np.where(np.isnan(p_logL), 0, p_logL)
+        p_logL[p_logL < 1e-50] = 0.
+
+        L_of_Mh = simpson(p_logL * Lval, Lval, axis=0)
+
 
     return L_of_Mh

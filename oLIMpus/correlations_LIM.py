@@ -103,13 +103,28 @@ class Power_Spectra_LIM:
         self.Deltasq_LIM = self._Pk_LIM * self._k3over2pi2 
 
     ### STEP 4: define the NON linear cross LIM-delta power spectrum assuming a lognormal for the delta
-        if (User_Parameters.FLAG_DO_DENS_NL and Line_Parameters._R < User_Parameters.MAX_R_NONLINEAR and Line_Parameters_cross is None):
-
+        if (Line_Parameters._R < User_Parameters.MAX_R_NONLINEAR and Line_Parameters_cross is None): #User_Parameters.FLAG_DO_DENS_NL and 
             self._Pk_deltaLIM = self.get_list_PS(self._xiR1_deltaLIM, LIM_coeff.zintegral)
         else:
             self._Pk_deltaLIM = self._Pk_deltaLIM_lin
         
-    ### STEP 5: sgot noise
+    ### STEP 5: add RSD             
+        if(self.RSD_MODE==0): #spherically avg'd RSD
+            mu2 = 0.
+        elif(self.RSD_MODE==1): #spherically avg'd RSD
+            mu2 = constants.MU_AVG**2 
+        elif(self.RSD_MODE==2): #LoS RSD (mu=1)
+            mu2 = constants.MU_LoS**2 
+        else:
+            print('Error, have to choose an RSD mode! RSD_MODE')
+
+        dzlist = LIM_coeff.zintegral*0.001 
+        # f(z) = dln D(d)/dln a = dln D(z) / dz * (dz/dln a)
+        growth_rate = - (1.+LIM_coeff.zintegral) * (np.log(cosmology.growth(Cosmo_Parameters, LIM_coeff.zintegral+dzlist))-np.log(cosmology.growth(Cosmo_Parameters, LIM_coeff.zintegral-dzlist)))/(2.0*dzlist) 
+
+        self._Pk_LIM_RSD = self._Pk_LIM + LIM_coeff.Inu_bar[:,np.newaxis]**2 * (growth_rate[:,np.newaxis] * mu2 * self.lin_growth[:,np.newaxis])**2 * LIM_corr._PklinCF[np.newaxis,:] + 2 * LIM_coeff.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM
+
+    ### STEP 6: shot noise
         if Line_Parameters.shot_noise and Line_Parameters_cross is None:
 
             self.P_shot_noise = LIM_coeff.shot_noise[:,np.newaxis] * np.ones((len(LIM_coeff.zintegral),len(self.klist_PS)))
@@ -117,26 +132,8 @@ class Power_Spectra_LIM:
         else:
             self.P_shot_noise = 0.
 
-        self._Pk_LIM_tot = self._Pk_LIM + self.P_shot_noise
-
-    ### STEP 6: add RSD 
-        if(self.RSD_MODE != 0): #with RSD (otherwise in real space)
-            
-            if(self.RSD_MODE==1): #spherically avg'd RSD
-                mu2 = constants.MU_AVG**2 
-            elif(self.RSD_MODE==2): #LoS RSD (mu=1)
-                mu2 = constants.MU_LoS**2 
-            else:
-                print('Error, have to choose an RSD mode! RSD_MODE')
-
-            dzlist = LIM_coeff.zintegral*0.001 
-            # f(z) = dln D(d)/dln a = dln D(z) / dz * (dz/dln a)
-            growth_rate = - (1.+LIM_coeff.zintegral) * (np.log(cosmology.growth(Cosmo_Parameters, LIM_coeff.zintegral+dzlist))-np.log(cosmology.growth(Cosmo_Parameters, LIM_coeff.zintegral-dzlist)))/(2.0*dzlist) 
-
-            cross_RSD = 0. # !!! FIX 
-
-            self._Pk_LIM_tot = self._Pk_LIM_tot + (growth_rate * mu2 * self.lin_growth[:,np.newaxis])**2 * LIM_corr._PklinCF + cross_RSD
-
+        self._Pk_LIM_tot = self._Pk_LIM_RSD + self.P_shot_noise
+        
     # --- #
     # define LIM window    
     def get_LIM_window(self, LIM_coeff, Line_Parameters):
@@ -207,29 +204,29 @@ class Power_Spectra_LIM:
 
         # --- #
         # if also matter treated as a smoothed lognormal
-        if (User_Parameters.FLAG_DO_DENS_NL and Line_Parameters._R < User_Parameters.MAX_R_NONLINEAR and Line_Parameters_cross is None):
+        if (Line_Parameters._R < User_Parameters.MAX_R_NONLINEAR and Line_Parameters_cross is None): # User_Parameters.FLAG_DO_DENS_NL and
+
+            windowR1 = Window(LIM_corr.WINDOWTYPE, LIM_corr._klistCF, Line_Parameters._R) # only one value for the resolution but defined for array on the ks
+            _Pksmooth = np.array(LIM_corr._PklinCF) * windowR1
+
+            self.rlist_CF, xi_R10_CF = LIM_corr._xif(_Pksmooth, extrap = False) 
+            xi_matter_R10_z0 = (xi_R10_CF)[np.newaxis,:]
+            xi_matter_R10_z = ne.evaluate('xi_matter_R10_z0 * growthRmatrix')
 
             if Line_Parameters.quadratic_lognormal:
 
-                g2 = sigmaR1
-                g2NL = 0.
-
-                numerator_NL = ne.evaluate('xi_LIM_R1R2_z+ g1 * g1 * (0.5 - g2NL * (1 - xi_matter_R1R2_z * xi_matter_R1R2_z)) + g2 * g2 * (0.5 - g1NL * (1 - xi_matter_R1R2_z * xi_matter_R1R2_z))')
-                
-                denominator_NL = ne.evaluate('1. - 2 * g1NL - 2 * g2NL + 4 * g1NL * g2NL * (1 - xi_matter_R1R2_z * xi_matter_R1R2_z)')
+                numerator_NL = ne.evaluate('gammaR1 * xi_matter_R10_z + gammaR1_NL * xi_matter_R10_z*xi_matter_R10_z + g1*g1/2')
+                    
+                denominator_NL = ne.evaluate('1. - 2 * g1NL')
                 
                 norm1 = ne.evaluate('exp(g1 * g1 / (2 - 4 * g1NL)) / sqrt(1 - 2 * g1NL)') 
-                norm2 = ne.evaluate('exp(g2 * g2 / (2 - 4 * g2NL)) / sqrt(1 - 2 * g2NL)') 
                 
-                log_norm = ne.evaluate('log(sqrt(denominator_NL) * norm1 * norm2)')
+                log_norm = ne.evaluate('log(sqrt(denominator_NL) * norm1)')
                 
-                log_norm = ne.evaluate('log(sqrt(denominator_NL) * norm1 * norm2)')
-
                 nonlinear_deltaLIM = ne.evaluate('exp(numerator_NL/denominator_NL - log_norm)-1')
 
             else:
-                xi_deltaLIM_R1_z = ne.evaluate('g1 * growthRmatrix * xi_matter_R1R2_z')
-                nonlinear_deltaLIM = ne.evaluate('exp(xi_deltaLIM_R1_z)-1')
+                nonlinear_deltaLIM = ne.evaluate('exp(gammaR1*xi_matter_R10_z)-1')
 
             self._xiR1_deltaLIM = LIM_coeff.Inu_bar[:,np.newaxis] * nonlinear_deltaLIM
         else:

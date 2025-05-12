@@ -30,27 +30,62 @@ CosmoParams_input_fid = dict(
         ns = 0.9660499, 
         tau_fid = 0.05430842, 
         HMF_CHOICE= "ST",
+        Flag_emulate_21cmfast = False,
         )
 
 AstroParams_input_fid = dict(
-        astromodel = 0, 
-        accretion_model = 0,
         # values from 2306.09403
-        alphastar = 0.61,
-        betastar = -1.91,
-        epsstar = 0.1, # pivot at z = 8
-        Mc = 10**12.03,
-        dlog10epsstardz = -0.0467,
+        # alphastar = 0.61,
+        # betastar = -1.91,
+        # epsstar = 0.1, # pivot at z = 8
+        # Mc = 10**12.03,
+        # dlog10epsstardz = -0.0467,
 
-        # we fix these values to get fduty == 1
-        Mturn_fixed = 1e-10,
+        # # we fix these values to get fduty == 1
+        # Mturn_fixed = 1e-10,
 
-        #fesc10 = 0.1,
-        alphaesc = -0.5,
-        #L40_xray = 3.0,
+        astromodel = 0,
+        accretion_model = 0,
+        alphastar = 0.5,
+        betastar = -0.5,
+        epsstar = 0.1,
+        Mc = 3e11,
+        Mturn_fixed = None,
+        dlog10epsstardz = 0.0,
+        quadratic_SFRD_lognormal = False, # Sarah Libanore
 
-        USE_POPIII = False, 
-        USE_LW_FEEDBACK = False, 
+#############################
+        fesc10 = 0.1,
+        alphaesc = 0.,
+        L40_xray = 3.0,
+        E0_xray = 500.,
+        alpha_xray = -1.0,
+        Emax_xray_norm=2000,
+
+        Nalpha_lyA_II = 9690,
+        Nalpha_lyA_III = 17900,
+
+        FLAG_MTURN_SHARP= False,
+
+        C0dust = 4.43,
+        C1dust = 1.99,
+        sigmaUV=0.5,
+
+        USE_POPIII = False,
+        alphastar_III = 0, 
+        betastar_III = 0,
+        fstar_III = 10**(-2.5),
+        Mc_III = 1e7,
+        dlog10epsstardz_III = 0.0,
+        fesc7_III = 10**(-1.35),
+        alphaesc_III = -0.3,
+        L40_xray_III = 3.0,
+        alpha_xray_III = -1.0,        
+        USE_LW_FEEDBACK = False,
+        A_LW = 2.0,
+        beta_LW = 0.6,
+        A_vcb = 1.0,
+        beta_vcb = 1.8,
         )
 
 
@@ -58,7 +93,13 @@ AstroParams_input_fid = dict(
 "Class to store the quantities needed in the LIM computation and analysis, define in the input list the ones that you want to vary while the others are fiducial"
 class run_oLIMpus:
 
-    def __init__(self, LINE, LINE_MODEL = 'Yang24', _R = 2., shot_noise= False, quadratic_lognormal=True, astromodel=1, ZMIN = 5., RSD_MODE = 0):
+    def __init__(self, LINE, LINE_MODEL = 'Yang24', _R = 2., shot_noise= False, quadratic_lognormal=True, sigma_LMh = 0., astromodel=0, ZMIN = 5., RSD_MODE = 0, \
+        alphastar = 0.5,
+        betastar = -0.5,
+        epsstar = 0.1,
+        Mc = 3e11,
+        Mturn_fixed = None,
+        dlog10epsstardz = 0.0,):
 
         self.UP = User_Parameters(
             precisionboost= 1.0, 
@@ -73,6 +114,13 @@ class run_oLIMpus:
 
         AstroParams_input = copy(AstroParams_input_fid)
         AstroParams_input['astromodel'] = astromodel
+        AstroParams_input['quadratic_SFRD_lognormal'] = quadratic_lognormal
+        AstroParams_input['alphastar'] = alphastar
+        AstroParams_input['betastar'] = betastar
+        AstroParams_input['epsstar'] = epsstar
+        AstroParams_input['Mturn_fixed'] = Mturn_fixed
+        AstroParams_input['Mc'] = Mc
+        AstroParams_input['dlog10epsstardz'] = dlog10epsstardz
         self.AP = zeus21.Astro_Parameters(self.UP, self.CP, **AstroParams_input)
 
         LineParams_Input_val = LineParams_Input(
@@ -80,7 +128,7 @@ class run_oLIMpus:
             LINE_MODEL = LINE_MODEL, # model of the line luminosity
             OBSERVABLE_LIM = 'Inu', # observe intensity in Jy/sr or mK
             _R = _R, # resolution for smoothing
-            sigma_LSFR = 0., # stochasticity in the L-SFR relation
+            sigma_LMh = sigma_LMh, # stochasticity in the L-SFR relation
             shot_noise = shot_noise, # add shot noise to the power spectrum
             Eulerian = True, # Eulerian or Lagrangian space, MOVE TO USER PARAMS
             quadratic_lognormal = quadratic_lognormal # use 1st or 2nd order in the SFRD and line lognormal approximation MOVE TO USER PARAMS
