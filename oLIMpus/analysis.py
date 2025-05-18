@@ -130,7 +130,6 @@ class run_oLIMpus:
             _R = _R, # resolution for smoothing
             sigma_LMh = sigma_LMh, # stochasticity in the L-SFR relation
             shot_noise = shot_noise, # add shot noise to the power spectrum
-            Eulerian = True, # Eulerian or Lagrangian space, MOVE TO USER PARAMS
             quadratic_lognormal = quadratic_lognormal # use 1st or 2nd order in the SFRD and line lognormal approximation MOVE TO USER PARAMS
         )
 

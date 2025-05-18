@@ -84,7 +84,8 @@ class Power_Spectra_LIM:
         # in this case we have a cross power spectrum between lines and no cross with density
             self._Pk_LIM_lin = (self.window_LIM.T * self.window_LIM_cross.T * self.lin_growth**2)[:,np.newaxis] * (Window(LIM_corr.WINDOWTYPE, LIM_corr._klistCF, Line_Parameters._R)* (Window(LIM_corr.WINDOWTYPE, LIM_corr._klistCF, Line_Parameters_cross._R)) * LIM_corr._PklinCF)[np.newaxis,:]
 
-            self._Pk_deltaLIM_lin = np.zeros_like(self._Pk_LIM_lin)
+            self._Pk_deltaLIM_lin = (self.window_LIM.T * self.lin_growth**2)[:,np.newaxis] * (Window(LIM_corr.WINDOWTYPE, LIM_corr._klistCF, Line_Parameters._R) *  LIM_corr._PklinCF)[np.newaxis,:] 
+            self._Pk_deltaLIM_lin_cross = (self.window_LIM_cross.T * self.lin_growth**2)[:,np.newaxis] * (Window(LIM_corr.WINDOWTYPE, LIM_corr._klistCF, Line_Parameters_cross._R) *  LIM_corr._PklinCF)[np.newaxis,:] 
 
         self.Deltasq_LIM_lin = self._Pk_LIM_lin * self._k3over2pi2                                                                 
         self.Deltasq_deltaLIM_lin = self._Pk_deltaLIM_lin * self._k3over2pi2 
@@ -106,7 +107,8 @@ class Power_Spectra_LIM:
         if (Line_Parameters._R < User_Parameters.MAX_R_NONLINEAR and Line_Parameters_cross is None): #User_Parameters.FLAG_DO_DENS_NL and 
             self._Pk_deltaLIM = self.get_list_PS(self._xiR1_deltaLIM, LIM_coeff.zintegral)
         else:
-            self._Pk_deltaLIM = self._Pk_deltaLIM_lin
+            self._Pk_deltaLIM = self.get_list_PS(self._xiR1_deltaLIM, LIM_coeff.zintegral)
+            self._Pk_deltaLIM_cross = self.get_list_PS(self._xiR1_deltaLIM_cross, LIM_coeff.zintegral)
         
     ### STEP 5: add RSD             
         if(self.RSD_MODE==0): #spherically avg'd RSD
@@ -122,7 +124,11 @@ class Power_Spectra_LIM:
         # f(z) = dln D(d)/dln a = dln D(z) / dz * (dz/dln a)
         growth_rate = - (1.+LIM_coeff.zintegral) * (np.log(cosmology.growth(Cosmo_Parameters, LIM_coeff.zintegral+dzlist))-np.log(cosmology.growth(Cosmo_Parameters, LIM_coeff.zintegral-dzlist)))/(2.0*dzlist) 
 
-        self._Pk_LIM_RSD = self._Pk_LIM + LIM_coeff.Inu_bar[:,np.newaxis]**2 * (growth_rate[:,np.newaxis] * mu2 * self.lin_growth[:,np.newaxis])**2 * LIM_corr._PklinCF[np.newaxis,:] + 2 * LIM_coeff.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM
+        if Line_Parameters_cross is None:
+            self._Pk_LIM_RSD = self._Pk_LIM + LIM_coeff.Inu_bar[:,np.newaxis]**2 * (growth_rate[:,np.newaxis] * mu2 * self.lin_growth[:,np.newaxis])**2 * LIM_corr._PklinCF[np.newaxis,:] + 2 * LIM_coeff.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM
+        else:
+            self._Pk_LIM_RSD = self._Pk_LIM + LIM_coeff.Inu_bar[:,np.newaxis]*LIM_coeff_cross.Inu_bar[:,np.newaxis] * (growth_rate[:,np.newaxis] * mu2 * self.lin_growth[:,np.newaxis])**2 * LIM_corr._PklinCF[np.newaxis,:] + LIM_coeff.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM + LIM_coeff_cross.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM_cross
+
 
     ### STEP 6: shot noise
         if Line_Parameters.shot_noise and Line_Parameters_cross is None:
@@ -183,28 +189,33 @@ class Power_Spectra_LIM:
                 gammaR2_NL = LIM_coeff_cross.gamma2_LIM[:,np.newaxis]
                 g2NL = gammaR2_NL * sigmaR2**2
 
+            norm1 = LIM_coeff.norm_exp[:,np.newaxis] #ne.evaluate('exp(g1 * g1 / (2 - 4 * g1NL)) / sqrt(1 - 2 * g1NL)') 
+            if Line_Parameters_cross is None:
+                norm2 = LIM_coeff.norm_exp[:,np.newaxis] #ne.evaluate('exp(g2 * g2 / (2 - 4 * g2NL)) / sqrt(1 - 2 * g2NL)') 
+            else:
+                norm2 = LIM_coeff_cross.norm_exp[:,np.newaxis]
+
+
             numerator_NL = ne.evaluate('xi_LIM_R1R2_z + g1 * g1 * (0.5 - g2NL * (1 - xi_matter_R1R2_z * xi_matter_R1R2_z)) + g2 * g2 * (0.5 - g1NL * (1 - xi_matter_R1R2_z * xi_matter_R1R2_z))')
             
             denominator_NL = ne.evaluate('1. - 2 * g1NL - 2 * g2NL + 4 * g1NL * g2NL * (1 - xi_matter_R1R2_z * xi_matter_R1R2_z)')
-            
-            norm1 = ne.evaluate('exp(g1 * g1 / (2 - 4 * g1NL)) / sqrt(1 - 2 * g1NL)') 
-            norm2 = ne.evaluate('exp(g2 * g2 / (2 - 4 * g2NL)) / sqrt(1 - 2 * g2NL)') 
             
             log_norm = ne.evaluate('log(sqrt(denominator_NL) * norm1 * norm2)')
 
             nonlinearcorrelation = ne.evaluate('exp(numerator_NL/denominator_NL - log_norm)-1')
 
         else:
-            nonlinearcorrelation = ne.evaluate('exp(xi_LIM_R1R2_z)-1')
+            nonlinearcorrelation = ne.evaluate('(exp(xi_LIM_R1R2_z)-1)')
 
         if Line_Parameters_cross is None:
-            self._xiR1R2_LIM = LIM_coeff.Inu_bar[:,np.newaxis]**2 * nonlinearcorrelation
+            self._xiR1R2_LIM = LIM_coeff.Inu_bar[:,np.newaxis]**2 * nonlinearcorrelation 
+
         else:
             self._xiR1R2_LIM = (LIM_coeff.Inu_bar * LIM_coeff_cross.Inu_bar)[:,np.newaxis] * nonlinearcorrelation
 
         # --- #
         # if also matter treated as a smoothed lognormal
-        if (Line_Parameters._R < User_Parameters.MAX_R_NONLINEAR and Line_Parameters_cross is None): # User_Parameters.FLAG_DO_DENS_NL and
+        if (Line_Parameters._R < User_Parameters.MAX_R_NONLINEAR ): # User_Parameters.FLAG_DO_DENS_NL and
 
             windowR1 = Window(LIM_corr.WINDOWTYPE, LIM_corr._klistCF, Line_Parameters._R) # only one value for the resolution but defined for array on the ks
             _Pksmooth = np.array(LIM_corr._PklinCF) * windowR1
@@ -218,19 +229,44 @@ class Power_Spectra_LIM:
                 numerator_NL = ne.evaluate('gammaR1 * xi_matter_R10_z + gammaR1_NL * xi_matter_R10_z*xi_matter_R10_z + g1*g1/2')
                     
                 denominator_NL = ne.evaluate('1. - 2 * g1NL')
-                
-                norm1 = ne.evaluate('exp(g1 * g1 / (2 - 4 * g1NL)) / sqrt(1 - 2 * g1NL)') 
-                
+                                
                 log_norm = ne.evaluate('log(sqrt(denominator_NL) * norm1)')
                 
                 nonlinear_deltaLIM = ne.evaluate('exp(numerator_NL/denominator_NL - log_norm)-1')
 
             else:
-                nonlinear_deltaLIM = ne.evaluate('exp(gammaR1*xi_matter_R10_z)-1')
+                nonlinear_deltaLIM = ne.evaluate('(exp(gammaR1*xi_matter_R10_z) -1)')
 
             self._xiR1_deltaLIM = LIM_coeff.Inu_bar[:,np.newaxis] * nonlinear_deltaLIM
+
+            if Line_Parameters_cross is not None:
+
+                windowR2_cross = Window(LIM_corr.WINDOWTYPE, LIM_corr._klistCF, Line_Parameters_cross._R) # only one value for the resolution but defined for array on the ks
+                _Pksmooth_cross = np.array(LIM_corr._PklinCF) * windowR2_cross
+
+                self.rlist_CF, xi_R20_CF_cross = LIM_corr._xif(_Pksmooth, extrap = False) 
+                xi_matter_R20_z0_cross = (xi_R20_CF_cross)[np.newaxis,:]
+                xi_matter_R20_z_cross = ne.evaluate('xi_matter_R20_z0_cross * growthRmatrix')
+         
+                if Line_Parameters.quadratic_lognormal:
+
+                    numerator_NL = ne.evaluate('gammaR2 * xi_matter_R20_z_cross + gammaR2_NL * xi_matter_R20_z_cross*xi_matter_R20_z_cross + g2*g2/2')
+                        
+                    denominator_NL = ne.evaluate('1. - 2 * g2NL')
+                                        
+                    log_norm = ne.evaluate('log(sqrt(denominator_NL) * norm2)')
+                    
+                    nonlinear_deltaLIM = ne.evaluate('exp(numerator_NL/denominator_NL - log_norm)-1')
+
+                else:
+                    nonlinear_deltaLIM = ne.evaluate('(exp(gammaR*xi_matter_R20_z_cross)-1)')
+
+                self._xiR1_deltaLIM_cross = LIM_coeff_cross.Inu_bar[:,np.newaxis] * nonlinear_deltaLIM
+
         else:
             self._xiR1_deltaLIM = 0.
+            if Line_Parameters_cross is not None:
+                self._xiR1_deltaLIM_cross = 0.
 
 
     # --- #

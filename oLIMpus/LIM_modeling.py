@@ -78,23 +78,26 @@ class get_LIM_coefficients:
         modd_LIM = Cosmo_Parameters.delta_crit_ST - deltaArray_LIM
         nu = modd_LIM / modSigmaSq_LIM # used in the HMF
 
-        EPS_HMF_corr = (nu/nu0) * (sigmaM_LIM/modSigmaSq_LIM)**2.0 * np.exp(-Cosmo_Parameters.a_corr_EPS * (nu**2-nu0**2)/2.0 ) 
+        EPS_HMF_corr_Lag = (nu/nu0) * (sigmaM_LIM/modSigmaSq_LIM)**2.0 * np.exp(-Cosmo_Parameters.a_corr_EPS * (nu**2-nu0**2)/2.0 ) 
+
+        EPS_HMF_corr = (1.0 + deltaArray_LIM) * EPS_HMF_corr_Lag
 
         # ---- #
-        # move to eulerian space if required
-        # !!! change to User_Params
-        if Line_Parameters.Eulerian:
-            EPS_HMF_corr *= (1.0 + deltaArray_LIM)
+        # get the correct mean accounting for EPS 
+        integrand_LIM_Lag = EPS_HMF_corr_Lag * rhoL_integrand(False, Line_Parameters,Astro_Parameters, Cosmo_Parameters, HMF_interpolator, mArray_LIM, zArray_LIM)
+        self.rhoL_dR_Lag = np.trapz(integrand_LIM_Lag, HMF_interpolator.logtabMh, axis = 1)
 
-        # ---- #
         # get the correct mean accounting for EPS and Eulerian
         integrand_LIM = EPS_HMF_corr * rhoL_integrand(False, Line_Parameters,Astro_Parameters, Cosmo_Parameters, HMF_interpolator, mArray_LIM, zArray_LIM)
-
         self.rhoL_dR = np.trapz(integrand_LIM, HMF_interpolator.logtabMh, axis = 1)
+
 
         # ---- #
         # compute the gammas for the lognormal approximation as the derivatives of rhoL in Eulerian space
         midpoint = deltaArray_LIM.shape[-1]//2 
+
+        self.gamma_LIM_Lag = np.log(self.rhoL_dR_Lag[:,midpoint+1]/self.rhoL_dR_Lag[:,midpoint-1]) / (deltaArray_LIM[:,0,midpoint+1] - deltaArray_LIM[:,0,midpoint-1])
+        self.gamma_LIM_Lag[np.isnan(self.gamma_LIM_Lag)] = 0.0            
 
         self.gamma_LIM = np.log(self.rhoL_dR[:,midpoint+1]/self.rhoL_dR[:,midpoint-1]) / (deltaArray_LIM[:,0,midpoint+1] - deltaArray_LIM[:,0,midpoint-1])
         self.gamma_LIM[np.isnan(self.gamma_LIM)] = 0.0            
@@ -106,22 +109,41 @@ class get_LIM_coefficients:
         y0 = np.log(self.rhoL_dR[:,midpoint-1])
         y1 = np.log(self.rhoL_dR[:,midpoint])
         y2 = np.log(self.rhoL_dR[:,midpoint+1])
-
         self.gamma2_LIM = 2.*(y0/((x1-x0)*(x2-x0)) + y2/((x2-x1)*(x2-x0)) - y1/((x2-x1)*(x1-x0))) / 2.
         self.gamma2_LIM[np.isnan(self.gamma2_LIM)] = 0.0
 
+        if Line_Parameters.quadratic_lognormal:
+            self.norm_exp = np.exp((self.gamma_LIM * self.sigmaofRtab_LIM)**2/(2-4*self.gamma2_LIM*self.sigmaofRtab_LIM**2)) / np.sqrt(1-2*self.gamma2_LIM*self.sigmaofRtab_LIM**2)
+        else:
+            self.norm_exp = np.exp((self.gamma_LIM * self.sigmaofRtab_LIM)**2/2)
+
     ### STEP 3: Correct Eulerian-Lagrangian mean
-        if(User_Parameters.C2_RENORMALIZATION_FLAG==True and Line_Parameters.Eulerian==True): # !!! move this flag to User_Params
+        if(User_Parameters.C2_RENORMALIZATION_FLAG==True): # !!! move this flag to User_Params
 
-            gamma_LIM_Lagrangian = self.gamma_LIM-1.0
+            sigma = self.sigmaofRtab_LIM**2
+
+            gamma_Lag = self.gamma_LIM_Lag
+            #gamma_Lag = self.gamma_LIM -1
+
+            #gamma_LIM_Lagrangian = self.gamma_LIM-1.0
             if Line_Parameters.quadratic_lognormal: # !!! move this flag to User_Params
-                gamma2_LIM_Lagrangian = self.gamma2_LIM + 1/2.
+                y0_Lag = np.log(self.rhoL_dR_Lag[:,midpoint-1])
+                y1_Lag = np.log(self.rhoL_dR_Lag[:,midpoint])
+                y2_Lag = np.log(self.rhoL_dR_Lag[:,midpoint+1])
+                self.gamma2_LIM_Lag = 2.*(y0_Lag/((x1-x0)*(x2-x0)) + y2_Lag/((x2-x1)*(x2-x0)) - y1_Lag/((x2-x1)*(x1-x0))) / 2.
+                self.gamma2_LIM_Lag[np.isnan(self.gamma2_LIM_Lag)] = 0.0
 
-                _corrfactorEulerian_LIM = (1.+(gamma_LIM_Lagrangian-2*gamma2_LIM_Lagrangian)*self.sigmaofRtab_LIM**2)/(1.-2*gamma2_LIM_Lagrangian*self.sigmaofRtab_LIM**2)
+                gamma2_Lag = self.gamma2_LIM_Lag
+                #gamma2_Lag = self.gamma2_LIM -1
+
+                _corrfactorEulerian_LIM = (1+(gamma_Lag-2*gamma2_Lag)*sigma**2)/(1-2*gamma2_Lag*sigma**2) 
+                #_corrfactorEulerian_LIM = self.norm_exp / (np.exp((self.gamma_LIM_Lag * self.sigmaofRtab_LIM)**2/(2-4*self.gamma2_LIM_Lag*self.sigmaofRtab_LIM**2)) / np.sqrt(1-2*self.gamma2_LIM_Lag*self.sigmaofRtab_LIM**2))
+                
 
             else:
-                _corrfactorEulerian_LIM = 1.0 + gamma_LIM_Lagrangian*self.sigmaofRtab_LIM**2
-
+                _corrfactorEulerian_LIM =  1+ gamma_Lag * sigma**2
+                #_corrfactorEulerian_LIM = self.norm_exp / np.exp((self.gamma_LIM_Lag * self.sigmaofRtab_LIM)**2/2)
+                
             self.rhoL_bar *= _corrfactorEulerian_LIM
 
     ### STEP 4: Line Intensity Anisotropies
@@ -158,8 +180,7 @@ class get_LIM_coefficients:
             
             self.shot_noise = scale_power_spectrum.value * np.trapezoid(integrand_shot, HMF_interpolator.logtabMh, axis = 1) 
 
-            if Line_Parameters.Eulerian:
-                self.shot_noise *= _corrfactorEulerian_LIM**2
+            self.shot_noise *= _corrfactorEulerian_LIM**2
 
 
 ### ---------------------- ###
@@ -276,7 +297,80 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
         log10_L[cond2] = a + (ma - mb) * log10_SFR_b + mb * log10_SFR[cond2]
         log10_L[cond3] = a + (ma - mb) * log10_SFR_b + (mb - mc) * log10_SFR_c + mc * log10_SFR[cond3]
 
+    elif Line_Parameters.LINE_MODEL == 'Lagache18':
 
+        if Line_Parameters.LINE != 'CII':
+            print('\nLINE NOT IMPLEMENTED YET IN THESAN21')
+            return -1
+
+        line_dict = inputs_LIM.Lagache18_CII_params
+
+        alpha_SFR =line_dict['alpha_SFR_0'] + line_dict['alpha_SFR'] * z
+
+        beta_SFR = line_dict['beta_SFR_0'] + line_dict['beta_SFR'] * z
+
+        try:
+            alpha_SFR[alpha_SFR < 0.] = 0. 
+        except:
+            if alpha_SFR < 0.:
+                alpha_SFR = 0.
+
+        log10_L = alpha_SFR * log10_SFR + beta_SFR     
+
+    elif Line_Parameters.LINE_MODEL == 'Yang21':
+
+        if Line_Parameters.LINE == 'CO21':
+            line_dict = inputs_LIM.Yang21_CO21_params
+            if z<4.0:
+                logM1 = YangEmp_f2(12.12,-.1704,0,z)
+                logN = YangEmp_f2(-5.95,.278,-.0521,z)
+                a = YangEmp_f2(1.69,.126,-.028,z)
+                b = YangEmp_f1(1.8,2.76,-.0678,z)
+            elif z<5.0:
+                logM1 = YangEmp_f2(11.74,-.07050,0,z)
+                logN = YangEmp_f2(-5.57,-.025,0,z)
+                a = YangEmp_f2(4.557,-1.215,.13,z)
+                b = YangEmp_f2(.657,-.0794,0,z)
+            #elif z<8.5:
+            else:
+                logM1 = YangEmp_f2(11.63,-.05266,0,z)
+                logN = YangEmp_f2(-5.26,-.0849,0,z)
+                a = YangEmp_f2(2.47,-.210,.0132,z)
+                b = YangEmp_f1(38.3,.841,.169,z)
+
+        else:
+            print('\nLINE NOT IMPLEMENTED YET IN YANG21')
+            return -1
+
+        # Empirically fit parameter values for the Yang+ empirical XX model
+        A = line_dict['A']
+
+        YangEmp_f2 = lambda x1, x2, x3, zz: 1 + x2*z + x3*zz**2
+        YangEmp_f1 = lambda x1, x2, x3, zz: x1*np.exp(-zz/x2) + x3
+        
+        M1 = 10**logM1
+        N = 10**logN
+
+        log10_L = np.log10(A*(2*N*massVector/((massVector/M1)**-a+(massVector/M1)**b)))
+
+    elif Line_Parameters.LINE_MODEL == 'Li16':
+
+        if Line_Parameters.LINE == 'CO21':
+            line_dict = inputs_LIM.Li16_C021_params
+        else:
+            print('\nLINE NOT IMPLEMENTED YET IN YANG21')
+            return -1
+
+        alpha = line_dict['alpha']
+        beta = line_dict['beta']
+        dMF = line_dict['dMF']
+        L0 = line_dict['L0']
+
+        L_IR = 10**log10_SFR / (dMF*1e-10)
+        Lprime = (10.**-beta * L_IR)**(1./alpha)
+    
+        log10_L = np.log10(L0*Lprime)
+    
     else:
         print('\nLINE MODEL NOT IMPLEMENTED YET')
         return -1

@@ -17,7 +17,6 @@ class LineParams_Input:
                  sigma_LMh = 0., # stochasticity in the L-Mh relation
                  shot_noise = False, # add shot noise to the LIM power spectrum
 
-                 Eulerian = True, # Eulerian or Lagrangian space, MOVE TO USER PARAMS
                  quadratic_lognormal = False, # use 1st or 2nd order in the SFRD and line lognormal approximation MOVE TO USER PARAMS
                  ):
         
@@ -29,7 +28,6 @@ class LineParams_Input:
         self.shot_noise = shot_noise
 
         # !!! move to User_Params
-        self.Eulerian = Eulerian
         self.quadratic_lognormal = quadratic_lognormal
 
 
@@ -46,8 +44,14 @@ class Line_Parameters:
             lambda_line = 4960*u.AA 
         elif self.LINE == 'Ha':
             lambda_line = 6563*u.AA
-        if self.LINE == 'Hb':
+        elif self.LINE == 'Hb':
             lambda_line = 4861*u.AA 
+        elif self.LINE == 'CII':
+            lambda_line = 1.58e6*u.AA 
+        elif self.LINE == 'CO21': # 2-1 transition
+            lambda_line = 1.3e7*u.AA 
+        elif self.LINE == 'CO10': # 2-1 transition
+            lambda_line = 2.6e7*u.AA 
         self.nu_rest = (cu.c / (lambda_line)).to(u.Hz) # rest frame frequency in Hz 
 
         self.OBSERVABLE_LIM = LineParams_Input.OBSERVABLE_LIM
@@ -64,7 +68,6 @@ class Line_Parameters:
         self.shot_noise = LineParams_Input.shot_noise
 
         # !!! move to User_Params
-        self.Eulerian = LineParams_Input.Eulerian
         self.quadratic_lognormal = LineParams_Input.quadratic_lognormal
 
 
@@ -131,3 +134,20 @@ THESAN21_Hb_params = {'a': 7.62,
     'mc': 0.41, 
     'log10_SFR_c': 0.96, 
     }
+
+Lagache18_CII_params = {'alpha_SFR_0': 1.4-0.07*10,
+        'beta_SFR_0': 7.1-0.07*10,
+        'alpha_SFR': 0.,
+        'beta_SFR': 0.,
+        }
+
+Yang21_CO21_params = {
+    'A':1.
+}
+
+Li16_C021_params = {
+    'alpha':1.11,
+    'beta':0.6,
+    'dMF':1.,
+    'L0':4.9e-5
+}

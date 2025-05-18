@@ -161,10 +161,7 @@ class CoevalBox_percell:
         mean_SFRD_numerical = np.mean(SFRDbox_flattend)
         SFRDbox_Lagrangian_flattened = ne.evaluate('mean_SFRD_theory/mean_SFRD_numerical * SFRDbox_flattend')
 
-        if Line_Parameters.Eulerian: # !!! move to user_params
-            SFRDbox_flattend_scaled = ne.evaluate('SFRDbox_Lagrangian_flattened * (1+density_box)')
-        else:
-            SFRDbox_flattend_scaled = SFRDbox_Lagrangian_flattened
+        SFRDbox_flattend_scaled = ne.evaluate('SFRDbox_Lagrangian_flattened * (1+density_box)')
 
         self.SFRD_box = SFRDbox_flattend_scaled.reshape(Nbox,Nbox,Nbox)
 
@@ -175,14 +172,12 @@ class CoevalBox_percell:
         rhoLbox_flattened = np.trapezoid(integrand_LIM, HMF_interpolator.logtabMh, axis = 0) 
 
         # scale the mean 
-        mean_rhoL_theory = LIM_coeff.rhoL_avg[_iz] # this is in Lagrangian
-        mean_rhoL_numerical = np.mean(rhoLbox_flattened)
-        rhoLbox_Lagrangian_flattened = ne.evaluate('mean_rhoL_theory/mean_rhoL_numerical * rhoLbox_flattened')
+        # mean_rhoL_theory = LIM_coeff.rhoL_avg[_iz] # this is in Lagrangian
+        # mean_rhoL_numerical = np.mean(rhoLbox_flattened)
+        # rhoLbox_Lagrangian_flattened = ne.evaluate('mean_rhoL_theory/mean_rhoL_numerical * rhoLbox_flattened')
+        rhoLbox_Lagrangian_flattened = ne.evaluate('rhoLbox_flattened')
          
-        if Line_Parameters.Eulerian:
-            rhoLbox_flattend_scaled = ne.evaluate('rhoLbox_Lagrangian_flattened * (1+density_box)')
-        else:
-            rhoLbox_flattend_scaled = rhoLbox_Lagrangian_flattened
+        rhoLbox_flattend_scaled = ne.evaluate('rhoLbox_Lagrangian_flattened * (1+density_box)')
 
         self.rhoL_box = rhoLbox_flattend_scaled.reshape(Nbox,Nbox,Nbox)
 
