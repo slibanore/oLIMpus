@@ -319,6 +319,9 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
 
     elif Line_Parameters.LINE_MODEL == 'Yang21':
 
+        YangEmp_f2 = lambda x1, x2, x3, zz: 1 + x2*z + x3*zz**2
+        YangEmp_f1 = lambda x1, x2, x3, zz: x1*np.exp(-zz/x2) + x3
+
         if Line_Parameters.LINE == 'CO21':
             line_dict = inputs_LIM.Yang21_CO21_params
             if z<4.0:
@@ -338,15 +341,30 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
                 a = YangEmp_f2(2.47,-.210,.0132,z)
                 b = YangEmp_f1(38.3,.841,.169,z)
 
+        elif Line_Parameters.LINE == 'CO10':
+            if z<4.0:
+                logM1 = YangEmp_f2(12.13,-.1678,0,z)
+                logN = YangEmp_f2(-6.855,.2366,-.05013,z)
+                a = YangEmp_f2(1.642,.1663,-.03238,z)
+                b = YangEmp_f1(1.77,2.72,-.0827,z)
+            elif z<5.0:
+                logM1 = YangEmp_f2(11.75,-0.06833,0,z)
+                logN = YangEmp_f2(-6.554,-0.03725,0,z)
+                a = YangEmp_f2(3.73,-.833,.0884,z)
+                b = YangEmp_f2(.598,-.0710,0,z)
+            #elif z<8.5:
+            else:
+                logM1 = YangEmp_f2(11.63,-.04943,0,z)
+                logN = YangEmp_f2(-6.274,-.09087,0,z)
+                a = YangEmp_f2(2.56,-.223,.0142,z)
+                b = YangEmp_f1(33.4,.846,.16,z)
+
         else:
             print('\nLINE NOT IMPLEMENTED YET IN YANG21')
             return -1
 
         # Empirically fit parameter values for the Yang+ empirical XX model
         A = line_dict['A']
-
-        YangEmp_f2 = lambda x1, x2, x3, zz: 1 + x2*z + x3*zz**2
-        YangEmp_f1 = lambda x1, x2, x3, zz: x1*np.exp(-zz/x2) + x3
         
         M1 = 10**logM1
         N = 10**logN
