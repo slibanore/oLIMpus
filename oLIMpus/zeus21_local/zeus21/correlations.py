@@ -758,8 +758,7 @@ class Power_Spectra:
                 self._II_deltaxi_dTx = D_coeffzp2Tx * np.sum(D_coeffR2Tx * (nonlinearcorrelation -1 -D_gammaR2*D_growthRmatrix*D_corrdNL/(1-2.*D_gammaR2N*D_sigmaR2**2)), axis = 2)
 
             else:
-                D_gammaR2 *= D_growthRmatrix    
-                self._II_deltaxi_dTx =  D_coeffzp2Tx * np.sum(D_coeffR2Tx * ((np.exp(D_gammaR2 * D_growthRmatrix * D_corrdNL)-1.0) - D_gammaR2 * D_growthRmatrix * D_corrdNL), axis = 2)
+                self._II_deltaxi_dTx =  D_coeffzp2Tx * np.sum(D_coeffR2Tx * ((np.exp(D_gammaR2 * D_growthRmatrix**2 * D_corrdNL)-1.0) - D_gammaR2 * D_growthRmatrix**2 * D_corrdNL), axis = 2)
 
 
             self._II_deltaxi_dTx = np.moveaxis(self._II_deltaxi_dTx, 1, 0)
