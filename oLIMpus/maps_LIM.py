@@ -7,7 +7,7 @@ BGU - April 2025
 import numpy as np 
 import powerbox as pbox
 from scipy.interpolate import interp1d
-from oLIMpus import z21_utilities, sfrd, LineLuminosity, CoevalMaps, BMF, cosmology
+from oLIMpus import z21_utilities, sfrd, LineLuminosity, CoevalMaps, BMF
 from oLIMpus.zeus21_local.zeus21.maps import reionization_maps as reio
 import numexpr as ne 
 from scipy.interpolate import InterpolatedUnivariateSpline as spline
@@ -82,6 +82,8 @@ class CoevalBox_LIM_analytical:
             )
 
             self.density_box = pb.delta_x() # density box
+            density_fft = np.fft.fftn(self.density_box)
+            self.density_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, density_fft))
 
         if RSD == 0:
             Pnu = LIM_Power_Spectrum._Pk_LIM[_iz,:]

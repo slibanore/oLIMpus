@@ -6,3 +6,4 @@ analysis*/
 plots_*
 .gitignore
 test_*
+cross_correlation_21cm.ipynb
