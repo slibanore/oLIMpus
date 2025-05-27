@@ -74,7 +74,7 @@ def THESAN21(line, dotM):
 # from arXiv:1711.00798
 def Lagache18(line, dotM):
 
-    if line == 'CII':
+    if line != 'CII':
         print('\nLINE NOT IMPLEMENTED YET IN LAGACHE18')
         return -1
 
