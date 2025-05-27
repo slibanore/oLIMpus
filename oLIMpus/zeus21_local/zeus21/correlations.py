@@ -643,13 +643,12 @@ class Power_Spectra:
                 log_norm = ne.evaluate('log(sqrt(denominator_NL) * norm1)')
                 nonlinearcorrelation = ne.evaluate('exp(numerator_NL/denominator_NL - log_norm)')
 
-                self._II_deltaxi_dxa = 0.*np.sum(D_coeffR1xa * (
+                self._II_deltaxi_dxa = np.sum(D_coeffR1xa * (
                     nonlinearcorrelation - 1 - D_gammaR1 * D_growthRmatrix**2 * D_corrdNL/(1-2.*D_gammaR1N*D_sigmaR1**2)
                      ), axis = 1)
 
             else:  
-                D_gammaR1 *= D_growthRmatrix    
-                self._II_deltaxi_dxa = np.sum(D_coeffR1xa * ((np.exp(D_gammaR1 * D_growthRmatrix * D_corrdNL )-1.0 ) - D_gammaR1 * D_growthRmatrix * D_corrdNL), axis = 1)
+                self._II_deltaxi_dxa = np.sum(D_coeffR1xa * ((np.exp(D_gammaR1 * D_growthRmatrix**2 * D_corrdNL )-1.0 ) - D_gammaR1 * D_growthRmatrix**2 * D_corrdNL), axis = 1)
 
             self._II_deltaxi_d = (np.exp(growthRmatrix[:,:1]**2 * corrdNL[0,0,0,:]) - 1.0) - growthRmatrix[:,:1]**2 * corrdNL[0,0,0,:]
     
@@ -755,7 +754,7 @@ class Power_Spectra:
                 log_norm = ne.evaluate('log(sqrt(denominator_NL) * norm2)')
                 nonlinearcorrelation = ne.evaluate('exp(numerator_NL/denominator_NL - log_norm)')
 
-                self._II_deltaxi_dTx = D_coeffzp2Tx * np.sum(D_coeffR2Tx * (nonlinearcorrelation -1 -D_gammaR2*D_growthRmatrix*D_corrdNL/(1-2.*D_gammaR2N*D_sigmaR2**2)), axis = 2)
+                self._II_deltaxi_dTx = D_coeffzp2Tx * np.sum(D_coeffR2Tx * (nonlinearcorrelation -1 -D_gammaR2*D_growthRmatrix**2 *D_corrdNL/(1-2.*D_gammaR2N*D_sigmaR2**2)), axis = 2)
 
             else:
                 self._II_deltaxi_dTx =  D_coeffzp2Tx * np.sum(D_coeffR2Tx * ((np.exp(D_gammaR2 * D_growthRmatrix**2 * D_corrdNL)-1.0) - D_gammaR2 * D_growthRmatrix**2 * D_corrdNL), axis = 2)
