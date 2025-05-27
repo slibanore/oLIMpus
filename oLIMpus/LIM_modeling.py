@@ -6,8 +6,8 @@ BGU - April 2025
 '''
 from oLIMpus import constants
 from oLIMpus import cosmology
-from oLIMpus import sfrd
-from oLIMpus import inputs_LIM
+from oLIMpus import sfrd, inputs_LIM
+from oLIMpus import LIM_luminosities as L
 import numpy as np 
 import astropy.units as u 
 import astropy.constants as cu 
@@ -241,157 +241,16 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
     if Line_Parameters.LINE_MODEL == 'SFRD':
         log10_L = np.log10(dotM)
 
-    # 2) from arXiv:2409.03997
-    elif Line_Parameters.LINE_MODEL == 'Yang24':
-        if Line_Parameters.LINE == 'OIII':
-            line_dict = inputs_LIM.Yang24_OIII_params
-        elif Line_Parameters.LINE == 'OII':
-            line_dict = inputs_LIM.Yang24_OII_params
-        elif Line_Parameters.LINE == 'Ha':
-            line_dict = inputs_LIM.Yang24_Ha_params
-        elif Line_Parameters.LINE == 'Hb':
-            line_dict = inputs_LIM.Yang24_Hb_params
-        else:
-            print('\nLINE NOT IMPLEMENTED YET IN YANG24')
-            return -1
-    
-        alpha = line_dict['alpha']
-        beta = line_dict['beta']
-        N = line_dict['N']
-        SFR1 = line_dict['SFR1']
-
-        L_line = 2. * N * dotM / ((dotM / SFR1)**(-alpha) + (dotM / SFR1)**beta)
-
-        log10_L = np.log10(L_line)
-
-    # from arXiv:2111.02411
-    elif Line_Parameters.LINE_MODEL == 'THESAN21':
-        if Line_Parameters.LINE == 'OIII':
-            line_dict = inputs_LIM.THESAN21_OIII_params
-        elif Line_Parameters.LINE == 'Ha':
-            line_dict = inputs_LIM.THESAN21_OII_params
-        elif Line_Parameters.LINE == 'Ha':
-            line_dict = inputs_LIM.THESAN21_Ha_params
-        elif Line_Parameters.LINE == 'Hb':
-            line_dict = inputs_LIM.THESAN21_Hb_params
-        else:
-            print('\nLINE NOT IMPLEMENTED YET IN THESAN21')
-            return -1
-
-        a = line_dict['a']
-        ma = line_dict['ma']
-        mb = line_dict['mb']
-        log10_SFR_b = line_dict['log10_SFR_b']
-        mc = line_dict['mc']
-        log10_SFR_c = line_dict['log10_SFR_c']
-
-        log10_SFR = np.log10(dotM)
-
-        log10_L = np.empty_like(log10_SFR)
-
-        cond1 = log10_SFR < log10_SFR_b
-        cond2 = (log10_SFR >= log10_SFR_b) & (log10_SFR < log10_SFR_c)
-        cond3 = log10_SFR >= log10_SFR_c
-
-        log10_L[cond1] = a + ma * log10_SFR[cond1]
-        log10_L[cond2] = a + (ma - mb) * log10_SFR_b + mb * log10_SFR[cond2]
-        log10_L[cond3] = a + (ma - mb) * log10_SFR_b + (mb - mc) * log10_SFR_c + mc * log10_SFR[cond3]
-
-    elif Line_Parameters.LINE_MODEL == 'Lagache18':
-
-        if Line_Parameters.LINE != 'CII':
-            print('\nLINE NOT IMPLEMENTED YET IN THESAN21')
-            return -1
-
-        line_dict = inputs_LIM.Lagache18_CII_params
-
-        alpha_SFR =line_dict['alpha_SFR_0'] + line_dict['alpha_SFR'] * z
-
-        beta_SFR = line_dict['beta_SFR_0'] + line_dict['beta_SFR'] * z
-
-        try:
-            alpha_SFR[alpha_SFR < 0.] = 0. 
-        except:
-            if alpha_SFR < 0.:
-                alpha_SFR = 0.
-
-        log10_L = alpha_SFR * log10_SFR + beta_SFR     
-
-    elif Line_Parameters.LINE_MODEL == 'Yang21':
-
-        YangEmp_f2 = lambda x1, x2, x3, zz: 1 + x2*z + x3*zz**2
-        YangEmp_f1 = lambda x1, x2, x3, zz: x1*np.exp(-zz/x2) + x3
-
-        if Line_Parameters.LINE == 'CO21':
-            line_dict = inputs_LIM.Yang21_CO21_params
-            if z<4.0:
-                logM1 = YangEmp_f2(12.12,-.1704,0,z)
-                logN = YangEmp_f2(-5.95,.278,-.0521,z)
-                a = YangEmp_f2(1.69,.126,-.028,z)
-                b = YangEmp_f1(1.8,2.76,-.0678,z)
-            elif z<5.0:
-                logM1 = YangEmp_f2(11.74,-.07050,0,z)
-                logN = YangEmp_f2(-5.57,-.025,0,z)
-                a = YangEmp_f2(4.557,-1.215,.13,z)
-                b = YangEmp_f2(.657,-.0794,0,z)
-            #elif z<8.5:
-            else:
-                logM1 = YangEmp_f2(11.63,-.05266,0,z)
-                logN = YangEmp_f2(-5.26,-.0849,0,z)
-                a = YangEmp_f2(2.47,-.210,.0132,z)
-                b = YangEmp_f1(38.3,.841,.169,z)
-
-        elif Line_Parameters.LINE == 'CO10':
-            if z<4.0:
-                logM1 = YangEmp_f2(12.13,-.1678,0,z)
-                logN = YangEmp_f2(-6.855,.2366,-.05013,z)
-                a = YangEmp_f2(1.642,.1663,-.03238,z)
-                b = YangEmp_f1(1.77,2.72,-.0827,z)
-            elif z<5.0:
-                logM1 = YangEmp_f2(11.75,-0.06833,0,z)
-                logN = YangEmp_f2(-6.554,-0.03725,0,z)
-                a = YangEmp_f2(3.73,-.833,.0884,z)
-                b = YangEmp_f2(.598,-.0710,0,z)
-            #elif z<8.5:
-            else:
-                logM1 = YangEmp_f2(11.63,-.04943,0,z)
-                logN = YangEmp_f2(-6.274,-.09087,0,z)
-                a = YangEmp_f2(2.56,-.223,.0142,z)
-                b = YangEmp_f1(33.4,.846,.16,z)
-
-        else:
-            print('\nLINE NOT IMPLEMENTED YET IN YANG21')
-            return -1
-
-        # Empirically fit parameter values for the Yang+ empirical XX model
-        A = line_dict['A']
-        
-        M1 = 10**logM1
-        N = 10**logN
-
-        log10_L = np.log10(A*(2*N*massVector/((massVector/M1)**-a+(massVector/M1)**b)))
-
-    elif Line_Parameters.LINE_MODEL == 'Li16':
-
-        if Line_Parameters.LINE == 'CO21':
-            line_dict = inputs_LIM.Li16_C021_params
-        else:
-            print('\nLINE NOT IMPLEMENTED YET IN YANG21')
-            return -1
-
-        alpha = line_dict['alpha']
-        beta = line_dict['beta']
-        dMF = line_dict['dMF']
-        L0 = line_dict['L0']
-
-        L_IR = 10**log10_SFR / (dMF*1e-10)
-        Lprime = (10.**-beta * L_IR)**(1./alpha)
-    
-        log10_L = np.log10(L0*Lprime)
-    
+    # 2) 
     else:
-        print('\nLINE MODEL NOT IMPLEMENTED YET')
-        return -1
+        if Line_Parameters.LINE_MODEL == 'Yang21':
+            log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, massVector, z)
+        else:
+            try:
+                log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, dotM)
+            except:
+                print('\nLINE MODEL NOT IMPLEMENTED')
+                return -1
 
     # --- #
     # stochasticity computation
@@ -400,6 +259,9 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
     else:
 
         sigma_L = Line_Parameters.sigma_LMh
+        if Line_Parameters.LINE_MODEL == 'Li16':
+            sigma_L = (Line_Parameters.sigma_LMh**2 + (inputs_LIM.Li16_C021_params['sig_SFR'].value*np.log(10))**2/inputs_LIM.Li16_C021_params['alpha']**2)**0.5
+
         log_muL = np.log(10**log10_L) 
         log_muL[abs(log10_L) == np.inf] = 0.
 

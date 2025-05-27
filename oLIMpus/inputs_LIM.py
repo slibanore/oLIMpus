@@ -7,6 +7,7 @@ BGU - April 2025
 
 import astropy.constants as cu
 import astropy.units as u
+import numpy as np 
 
 class LineParams_Input:
     def __init__ (self, 
@@ -64,7 +65,10 @@ class Line_Parameters:
             self._R = LineParams_Input._R 
 
         self.LINE_MODEL = LineParams_Input.LINE_MODEL 
-        self.sigma_LMh = LineParams_Input.sigma_LMh
+        try:
+            self.sigma_LMh = LineParams_Input.sigma_LMh.value*np.log(10) if LineParams_Input.sigma_LMh.unit == u.dex else LineParams_Input.sigma_LMh
+        except:
+            self.sigma_LMh = LineParams_Input.sigma_LMh
         self.shot_noise = LineParams_Input.shot_noise
 
         # !!! move to User_Params
@@ -149,5 +153,6 @@ Li16_C021_params = {
     'alpha':1.11,
     'beta':0.6,
     'dMF':1.,
-    'L0':4.9e-5
+    'L0':4.9e-5,
+    'sigma_SFR':0.3*u.dex
 }

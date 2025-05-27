@@ -101,15 +101,18 @@ class Power_Spectra_LIM:
             self._Pk_LIM = self.get_list_PS(self._xiR1R2_LIM,  LIM_coeff.zintegral)
             self._Pk_LIM.T[:len(Cosmo_Parameters._Rtabsmoo)-Cosmo_Parameters.indexmaxNL] = self._Pk_LIM_lin.T[:len(Cosmo_Parameters._Rtabsmoo)-Cosmo_Parameters.indexmaxNL]            
 
+
+        self._Pk_LIM[self._Pk_LIM < 0.] = 0. # this is to avoid when using large smoothing that drops below 0
         self.Deltasq_LIM = self._Pk_LIM * self._k3over2pi2 
 
     ### STEP 4: define the NON linear cross LIM-delta power spectrum assuming a lognormal for the delta
-        if (Line_Parameters._R < User_Parameters.MAX_R_NONLINEAR and Line_Parameters_cross is None): #User_Parameters.FLAG_DO_DENS_NL and 
+        if (Line_Parameters._R < User_Parameters.MAX_R_NONLINEAR):  #User_Parameters.FLAG_DO_DENS_NL and 
             self._Pk_deltaLIM = self.get_list_PS(self._xiR1_deltaLIM, LIM_coeff.zintegral)
-        else:
-            self._Pk_deltaLIM = self.get_list_PS(self._xiR1_deltaLIM, LIM_coeff.zintegral)
+        if Line_Parameters_cross is not None:
             self._Pk_deltaLIM_cross = self.get_list_PS(self._xiR1_deltaLIM_cross, LIM_coeff.zintegral)
         
+        self._Pk_deltaLIM[self._Pk_deltaLIM < 0.] = 0. # this is to avoid when using large smoothing that drops below 0
+
     ### STEP 5: add RSD             
         if(self.RSD_MODE==0): #spherically avg'd RSD
             mu2 = 0.
@@ -129,11 +132,13 @@ class Power_Spectra_LIM:
         else:
             self._Pk_LIM_RSD = self._Pk_LIM + LIM_coeff.Inu_bar[:,np.newaxis]*LIM_coeff_cross.Inu_bar[:,np.newaxis] * (growth_rate[:,np.newaxis] * mu2 * self.lin_growth[:,np.newaxis])**2 * LIM_corr._PklinCF[np.newaxis,:] + LIM_coeff.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM + LIM_coeff_cross.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM_cross
 
+        self._Pk_LIM_RSD[self._Pk_LIM_RSD < 0.] = 0. # this is to avoid when using large smoothing that drops below 0
 
     ### STEP 6: shot noise
         if Line_Parameters.shot_noise and Line_Parameters_cross is None:
 
             self.P_shot_noise = LIM_coeff.shot_noise[:,np.newaxis] * np.ones((len(LIM_coeff.zintegral),len(self.klist_PS)))
+            self.P_shot_noise *= Window(LIM_corr.WINDOWTYPE, LIM_corr._klistCF, Line_Parameters._R)**2
 
         else:
             self.P_shot_noise = 0.
@@ -189,12 +194,11 @@ class Power_Spectra_LIM:
                 gammaR2_NL = LIM_coeff_cross.gamma2_LIM[:,np.newaxis]
                 g2NL = gammaR2_NL * sigmaR2**2
 
-            norm1 = LIM_coeff.norm_exp[:,np.newaxis] #ne.evaluate('exp(g1 * g1 / (2 - 4 * g1NL)) / sqrt(1 - 2 * g1NL)') 
+            norm1 = LIM_coeff.norm_exp[:,np.newaxis] 
             if Line_Parameters_cross is None:
-                norm2 = LIM_coeff.norm_exp[:,np.newaxis] #ne.evaluate('exp(g2 * g2 / (2 - 4 * g2NL)) / sqrt(1 - 2 * g2NL)') 
+                norm2 = LIM_coeff.norm_exp[:,np.newaxis]  
             else:
                 norm2 = LIM_coeff_cross.norm_exp[:,np.newaxis]
-
 
             numerator_NL = ne.evaluate('xi_LIM_R1R2_z + g1 * g1 * (0.5 - g2NL * (1 - xi_matter_R1R2_z * xi_matter_R1R2_z)) + g2 * g2 * (0.5 - g1NL * (1 - xi_matter_R1R2_z * xi_matter_R1R2_z))')
             

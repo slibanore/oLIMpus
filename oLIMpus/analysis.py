@@ -106,7 +106,7 @@ class run_oLIMpus:
             FLAG_FORCE_LINEAR_CF= 0, 
             MIN_R_NONLINEAR= 0.5, 
             MAX_R_NONLINEAR= 200.0,
-            FLAG_DO_DENS_NL= False, 
+            FLAG_DO_DENS_NL= True, 
             FLAG_WF_ITERATIVE= True
             )
 

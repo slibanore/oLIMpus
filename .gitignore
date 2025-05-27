@@ -1,4 +1,8 @@
-zeus21_local_*
 build*
 *egg*
 *__pycache**
+analysis*/
+*.png
+plots_*
+.gitignore
+test_*
