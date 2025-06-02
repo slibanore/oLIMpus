@@ -172,7 +172,7 @@ class get_LIM_coefficients:
             
             if Line_Parameters.OBSERVABLE_LIM == 'Tnu':
 
-                scale_power_spectrum = ((self.coeff1_LIM * u.uK * u.Mpc**3 / u.Lsun)**2*u.Lsun**2*u.Mpc**-3).to(u.Mpc**3 * u.Jy**2/u.steradian**2)
+                scale_power_spectrum = ((self.coeff1_LIM * u.uK * u.Mpc**3 / u.Lsun)**2*u.Lsun**2*u.Mpc**-3).to(u.Mpc**3 * u.uK**2)
             
             elif Line_Parameters.OBSERVABLE_LIM == 'Inu':
 
@@ -245,6 +245,8 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
     else:
         if Line_Parameters.LINE_MODEL == 'Yang21':
             log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, massVector, z)
+        elif Line_Parameters.LINE_MODEL == 'Lagache18':
+            log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, dotM, z)
         else:
             try:
                 log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, dotM)
