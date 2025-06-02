@@ -23,12 +23,16 @@ import time
 class CoevalMaps:
     "Class that calculates and keeps coeval maps, one z at a time."
 
-    def __init__(self, T21_coefficients, Power_Spectrum, z, Lbox=600, Nbox=200, KIND=None, seed=1605):
+    def __init__(self, T21_coefficients, Power_Spectrum, z, Lbox=600, Nbox=200, KIND=None, seed=1605, one_slice=False):
         'the KIND flag determines the kind of map you make. Options are:'
         'KIND = 0, only T21 lognormal. OK approximation'
         'KIND = 1, density and T21 correlated. T21 has a gaussian and a lognormal component. Decent approximation'
         'KIND = 2, all maps'
         'KIND = 3, same as 2 but integrating over all R. Slow but most accurate'
+
+        if one_slice:
+            print('ONE SLICE STILL TO BE DEBUGGED!')
+            one_slice = False
 
         zlist = T21_coefficients.zintegral 
         _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
@@ -50,7 +54,7 @@ class CoevalMaps:
 
             pb = pbox.PowerBox(
                 N=self.Nbox,                     
-                dim=3,                     
+                dim=2 if one_slice else 3,                     
                 pk = lambda k: P21norminterp(k), 
                 boxlength = self.Lbox,           
                 seed = self.seed                
@@ -67,7 +71,7 @@ class CoevalMaps:
 
             pb = pbox.PowerBox(
                 N=self.Nbox,                     
-                dim=3,                     
+                dim=2 if one_slice else 3,                     
                 pk = lambda k: Pdinterp(k), 
                 boxlength = self.Lbox,           
                 seed = self.seed               
@@ -95,7 +99,7 @@ class CoevalMaps:
             #G or logG? TODO revisit
             pbe = pbox.LogNormalPowerBox(
                 N=self.Nbox,                     
-                dim=3,                     
+                dim=2 if one_slice else 3,                     
                 pk = lambda k: lognormpower(k), 
                 boxlength = self.Lbox,           
                 seed = self.seed+1                # uncorrelated
@@ -181,10 +185,14 @@ class reionization_maps:
                  input_boxlength=300., ncells=300, seed=1234, r_precision=1., barrier=None, 
                  PRINT_TIMER=True, ENFORCE_BMF_SCALE=True, 
                  LOGNORMAL_DENSITY=False, COMPUTE_DENSITY_AT_ALLZ=False, SPHERIZE=False, 
-                 COMPUTE_MASSWEIGHTED_IONFRAC=False, lowres_massweighting=1):
+                 COMPUTE_MASSWEIGHTED_IONFRAC=False, lowres_massweighting=1,one_slice=False):
         #Measure time elapsed from start
         self._start_time = time.time()
         
+        if one_slice:
+            print('ONE SLICE STILL TO BE DEBUGGED!')
+            one_slice = False
+
         ### boxes parameters
         self.input_z = input_z
         self.ENFORCE_BMF_SCALE = ENFORCE_BMF_SCALE
@@ -217,7 +225,7 @@ class reionization_maps:
 
         ### generating the density field at the closest redshift to the lower one inputed
         self.z_of_density = self.z[0]
-        self.density = self.generate_density(ClassyCosmo, CorrFClass)
+        self.density = self.generate_density(ClassyCosmo, CorrFClass,one_slice)
         self.density_allz = np.empty((len(self.z), self.ncells, self.ncells, self.ncells))
         if self.COMPUTE_DENSITY_AT_ALLZ:
             self.generate_density_allz(CosmoParams)
@@ -242,7 +250,7 @@ class reionization_maps:
             z21_utilities.print_timer(self._start_time, text_before="Total computation time: ")
         
 
-    def generate_density(self, ClassyCosmo, CorrFClass):
+    def generate_density(self, ClassyCosmo, CorrFClass, one_slice):
         if self.PRINT_TIMER:
             start_time = time.time()
             print("Generating density field...")
@@ -255,9 +263,9 @@ class reionization_maps:
     
         #generating density map
         if self.LOGNORMAL_DENSITY:
-            pb = pbox.LogNormalPowerBox(N=self.ncells, dim=3, pk=(lambda k: np.exp(pk_spl(np.log(k)))), boxlength=self.boxlength, seed=self.seed)
+            pb = pbox.LogNormalPowerBox(N=self.ncells, dim=2 if one_slice else 3, pk=(lambda k: np.exp(pk_spl(np.log(k)))), boxlength=self.boxlength, seed=self.seed)
         else:
-            pb = pbox.PowerBox(N=self.ncells, dim=3, pk=(lambda k: np.exp(pk_spl(np.log(k)))), boxlength=self.boxlength, seed=self.seed)
+            pb = pbox.PowerBox(N=self.ncells, dim=2 if one_slice else 3, pk=(lambda k: np.exp(pk_spl(np.log(k)))), boxlength=self.boxlength, seed=self.seed)
         density_field = pb.delta_x()
         if self.PRINT_TIMER:
             z21_utilities.print_timer(start_time, text_before="    done in ")

@@ -704,7 +704,7 @@ class get_T21_coefficients:
         
         #####################################################################################################
         ### STEP 10: Compute the 21cm Global Signal
-        self.T21avg = cosmology.T021(Cosmo_Parameters,self.zintegral) * self.xa_avg/(1.0 + self.xa_avg) * (1.0 - self.T_CMB * self.invTcol_avg) * self.xHI_avg
+        self.T21avg = cosmology.T021(Cosmo_Parameters,self.zintegral) * self.xa_avg/(1.0 + self.xa_avg) * (1.0 - self.T_CMB * self.invTcol_avg) #* self.xHI_avg SarahLibanore !!!!
         
         
 
