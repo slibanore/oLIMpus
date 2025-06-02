@@ -99,7 +99,8 @@ class run_oLIMpus:
         epsstar = 0.1,
         Mc = 3e11,
         Mturn_fixed = None,
-        dlog10epsstardz = 0.0,):
+        dlog10epsstardz = 0.0,
+        LIM_observable = 'Inu'):
 
         self.UP = User_Parameters(
             precisionboost= 1.0, 
@@ -107,7 +108,7 @@ class run_oLIMpus:
             MIN_R_NONLINEAR= 0.5, 
             MAX_R_NONLINEAR= 200.0,
             FLAG_DO_DENS_NL= False, 
-            FLAG_WF_ITERATIVE= True
+            FLAG_WF_ITERATIVE= True,
             )
 
         self.CP, ClassyC, self.zeus_corr, self.HMFcl =  cosmo_wrapper(self.UP, Cosmo_Parameters_Input(**CosmoParams_input_fid))
@@ -126,7 +127,7 @@ class run_oLIMpus:
         LineParams_Input_val = LineParams_Input(
             LINE = LINE, # which line
             LINE_MODEL = LINE_MODEL, # model of the line luminosity
-            OBSERVABLE_LIM = 'Inu', # observe intensity in Jy/sr or mK
+            OBSERVABLE_LIM = LIM_observable, # observe intensity in Jy/sr or mK
             _R = _R, # resolution for smoothing
             sigma_LMh = sigma_LMh, # stochasticity in the L-SFR relation
             shot_noise = shot_noise, # add shot noise to the power spectrum
