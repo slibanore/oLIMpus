@@ -84,7 +84,6 @@ class CoevalMaps:
 
             powerratioint = interp1d(klist,PdT21/Pd,fill_value=0.0,bounds_error=False)
 
-
             deltak = pb.delta_k()
 
             powerratio = powerratioint(pb.k())

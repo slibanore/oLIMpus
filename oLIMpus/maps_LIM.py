@@ -305,7 +305,7 @@ class CoevalBox_T21reionization:
 
             zeus_box = CoevalMaps(zeus_coeff, zeus_pk, z, Lbox, Nbox, KIND=1, seed=seed, one_slice=one_slice)
 
-            self.T21_map_only = zeus_box.T21map
+            self.T21_map_only = zeus_box.T21map / zeus_coeff.xHI_avg[_iz]
         
  
         else:
@@ -315,9 +315,8 @@ class CoevalBox_T21reionization:
 
             #self.T21_map_only = cosmology.T021(Cosmo_Parameters,zeus_coeff.zintegral) * self.xa_map/(1.0 + self.xa_map) * (1.0 - zeus_coeff.T_CMB * (self.invTcol_map)) 
 
-        self.T21_map_only *= self.xH_avg_map 
         self.T21_map = self.T21_map_only * self.xH_box
-
+        self.T21_map_only *= zeus_coeff.xHI_avg[_iz]
 
 # !!! towards better model for reionization
 def partial_ionize(dfield, ifield, BMF_class, CosmoParams, ir, mass_weighted_xHII):
@@ -417,14 +416,17 @@ def build_lightcone(which_lightcone,
 
 def lightcone_single_z(zi, zvals, Lbox, Nbox, Resolution, seed, which_lightcone, analytical, LIM_coeff, LIM_corr, PSLIM, coefficients_21, PS21, reionization_map_partial, ion_frac_withpartial, HMFintclass, CosmoParams,AstroParams,LineParams,RSD=0):
 
-    if which_lightcone == 'T21':
+    if which_lightcone == 'T21' or which_lightcone == 'T21_only':
         if analytical and zi == zvals[0]:
             print('Warning! The bubble part is not analytical')
         else:
             if zi == zvals[0]:
                 print('Warning! The T21 map is only  analytical, except for the bubble part')
 
-        box = CoevalBox_T21reionization(coefficients_21,PS21,zi,reionization_map_partial, ion_frac_withpartial,Lbox,Nbox,seed,MAP_T21_FULL=True,).T21_map
+        if which_lightcone == 'T21_only':
+            box = CoevalBox_T21reionization(coefficients_21,PS21,zi,reionization_map_partial, ion_frac_withpartial,Lbox,Nbox,seed,MAP_T21_FULL=True,).T21_map_only
+        else:
+            box = CoevalBox_T21reionization(coefficients_21,PS21,zi,reionization_map_partial, ion_frac_withpartial,Lbox,Nbox,seed,MAP_T21_FULL=True,).T21_map
 
     elif which_lightcone == 'density':
         if not analytical and zi == zvals[0]:
@@ -536,7 +538,7 @@ def plot_lightcone(which_lightcone,
         use_cmap = 'gray'
         vmin = 0.
         vmax = 1.
-    elif which_lightcone == 'T21':
+    elif which_lightcone == 'T21' or which_lightcone == 'T21_only':
         text_label_helper = r'$T_{21}\,[{\mu\rm K}]$'
         use_cmap = eor_colour
         vmin = min_value

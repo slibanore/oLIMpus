@@ -100,6 +100,7 @@ class run_oLIMpus:
         Mc = 3e11,
         Mturn_fixed = None,
         dlog10epsstardz = 0.0,
+        fesc=0.1,
         LIM_observable = 'Inu'):
 
         self.UP = User_Parameters(
@@ -122,6 +123,7 @@ class run_oLIMpus:
         AstroParams_input['Mturn_fixed'] = Mturn_fixed
         AstroParams_input['Mc'] = Mc
         AstroParams_input['dlog10epsstardz'] = dlog10epsstardz
+        AstroParams_input['fesc10'] = fesc
         self.AP = zeus21.Astro_Parameters(self.UP, self.CP, **AstroParams_input)
 
         LineParams_Input_val = LineParams_Input(

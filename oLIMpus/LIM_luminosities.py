@@ -36,7 +36,7 @@ def Yang24(line, dotM):
 def THESAN21(line, dotM):
     if line == 'OIII':
         line_dict = inputs_LIM.THESAN21_OIII_params
-    elif line == 'Ha':
+    elif line == 'OII':
         line_dict = inputs_LIM.THESAN21_OII_params
     elif line == 'Ha':
         line_dict = inputs_LIM.THESAN21_Ha_params

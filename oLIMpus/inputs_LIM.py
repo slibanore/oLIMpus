@@ -43,6 +43,8 @@ class Line_Parameters:
         
         if self.LINE == 'OIII':
             lambda_line = 4960*u.AA 
+        elif self.LINE == 'OII':
+            lambda_line = 3727*u.AA 
         elif self.LINE == 'Ha':
             lambda_line = 6563*u.AA
         elif self.LINE == 'Hb':
@@ -87,9 +89,9 @@ Yang24_OIII_params = {
 
 Yang24_OII_params = {
         'alpha': -2.43e-1,
-        'beta': 2.5,
-        'N': 2.14e6,
-        'SFR1': 5.91e1,
+        'beta': 2.49,
+        'N': 2.00e6,
+        'SFR1': 6.28e1,
         }
 
 Yang24_Ha_params = {
