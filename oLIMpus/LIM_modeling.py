@@ -244,12 +244,12 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
     # 2) 
     else:
         if Line_Parameters.LINE_MODEL == 'Yang21':
-            log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, massVector, z)
+            log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, massVector, z, Line_Parameters.line_dict)
         elif Line_Parameters.LINE_MODEL == 'Lagache18':
-            log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, dotM, z)
+            log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, dotM, z, Line_Parameters.line_dict)
         else:
             try:
-                log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, dotM)
+                log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, dotM, Line_Parameters.line_dict)
             except:
                 print('\nLINE MODEL NOT IMPLEMENTED')
                 return -1

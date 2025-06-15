@@ -93,7 +93,7 @@ AstroParams_input_fid = dict(
 "Class to store the quantities needed in the LIM computation and analysis, define in the input list the ones that you want to vary while the others are fiducial"
 class run_oLIMpus:
 
-    def __init__(self, LINE, LINE_MODEL = 'Yang24', _R = 2., shot_noise= False, quadratic_lognormal=True, sigma_LMh = 0., astromodel=0, ZMIN = 5., RSD_MODE = 0, \
+    def __init__(self, LINE, LINE_MODEL = 'Yang24', _R = 2., shot_noise= False, quadratic_lognormal=True, sigma_LMh = 0., astromodel=0, ZMIN = 5., RSD_MODE = 0, sigma_FoG=0.,\
         alphastar = 0.5,
         betastar = -0.5,
         epsstar = 0.1,
@@ -101,7 +101,8 @@ class run_oLIMpus:
         Mturn_fixed = None,
         dlog10epsstardz = 0.0,
         fesc=0.1,
-        LIM_observable = 'Inu'):
+        LIM_observable = 'Inu', 
+        line_dict = None):
 
         self.UP = User_Parameters(
             precisionboost= 1.0, 
@@ -133,7 +134,8 @@ class run_oLIMpus:
             _R = _R, # resolution for smoothing
             sigma_LMh = sigma_LMh, # stochasticity in the L-SFR relation
             shot_noise = shot_noise, # add shot noise to the power spectrum
-            quadratic_lognormal = quadratic_lognormal # use 1st or 2nd order in the SFRD and line lognormal approximation MOVE TO USER PARAMS
+            quadratic_lognormal = quadratic_lognormal, # use 1st or 2nd order in the SFRD and line lognormal approximation MOVE TO USER PARAMS
+            line_dict= line_dict # parameters that enter the L-SFR or L-Mh relation
         )
 
         self.LP = Line_Parameters(LineParams_Input_val,self.UP)
@@ -142,7 +144,7 @@ class run_oLIMpus:
 
         self.LIM_corr = Correlations_LIM(self.LP, self.CP, ClassyC)
 
-        self.LIM_pk = Power_Spectra_LIM(self.LIM_corr, self.LIM_coeff, self.LP, self.CP, self.UP, RSD_MODE)
+        self.LIM_pk = Power_Spectra_LIM(self.LIM_corr, self.LIM_coeff, self.LP, self.CP, self.UP, RSD_MODE,sigma_FoG=sigma_FoG)
 
         self.zeus_coeff = get_T21_coefficients(self.UP, self.CP, ClassyC, self.AP, self.HMFcl, ZMIN)
 

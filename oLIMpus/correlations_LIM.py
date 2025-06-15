@@ -57,7 +57,7 @@ class Power_Spectra_LIM:
     "Get LIM auto power spetrum from correlation functions and coefficients as function of z"
 
     def __init__(self, LIM_corr, LIM_coeff, Line_Parameters, Cosmo_Parameters, User_Parameters, RSD_MODE,
-                    LIM_coeff_cross = None, Line_Parameters_cross = None): # second line to cross correlate
+                    LIM_coeff_cross = None, Line_Parameters_cross = None, sigma_FoG = 0.): # second line to cross correlate
 
     ### STEP 0: Variable Setup
         self._r_CF = LIM_corr.rlist_CF # array of r for the correlation function
@@ -131,6 +131,9 @@ class Power_Spectra_LIM:
             self._Pk_LIM_RSD = self._Pk_LIM + LIM_coeff.Inu_bar[:,np.newaxis]**2 * (growth_rate[:,np.newaxis] * mu2 * self.lin_growth[:,np.newaxis])**2 * LIM_corr._PklinCF[np.newaxis,:] + 2 * LIM_coeff.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM
         else:
             self._Pk_LIM_RSD = self._Pk_LIM + LIM_coeff.Inu_bar[:,np.newaxis]*LIM_coeff_cross.Inu_bar[:,np.newaxis] * (growth_rate[:,np.newaxis] * mu2 * self.lin_growth[:,np.newaxis])**2 * LIM_corr._PklinCF[np.newaxis,:] + LIM_coeff.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM + LIM_coeff_cross.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM_cross
+
+        if sigma_FoG != 0.:
+            self._Pk_LIM_RSD /= (1.+ mu2*(self.klist_PS*sigma_FoG)**2/2.)**2
 
         self._Pk_LIM_RSD[self._Pk_LIM_RSD < 0.] = 0. # this is to avoid when using large smoothing that drops below 0
 

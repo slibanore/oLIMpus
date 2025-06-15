@@ -6,19 +6,20 @@ from oLIMpus import inputs_LIM
 ########################################################
 
 # from arXiv:2409.03997
-def Yang24(line, dotM):
+def Yang24(line, dotM, line_dict):
 
-    if line == 'OIII':
-        line_dict = inputs_LIM.Yang24_OIII_params
-    elif line == 'OII':
-        line_dict = inputs_LIM.Yang24_OII_params
-    elif line== 'Ha':
-        line_dict = inputs_LIM.Yang24_Ha_params
-    elif line == 'Hb':
-        line_dict = inputs_LIM.Yang24_Hb_params
-    else:
-        print('\nLINE NOT IMPLEMENTED YET IN YANG24')
-        return -1
+    if line_dict is None:
+        if line == 'OIII':
+            line_dict = inputs_LIM.Yang24_OIII_params
+        elif line == 'OII':
+            line_dict = inputs_LIM.Yang24_OII_params
+        elif line== 'Ha':
+            line_dict = inputs_LIM.Yang24_Ha_params
+        elif line == 'Hb':
+            line_dict = inputs_LIM.Yang24_Hb_params
+        else:
+            print('\nLINE NOT IMPLEMENTED YET IN YANG24')
+            return -1
 
     alpha = line_dict['alpha']
     beta = line_dict['beta']
@@ -33,18 +34,20 @@ def Yang24(line, dotM):
 
 
 # from arXiv:2111.02411
-def THESAN21(line, dotM):
-    if line == 'OIII':
-        line_dict = inputs_LIM.THESAN21_OIII_params
-    elif line == 'OII':
-        line_dict = inputs_LIM.THESAN21_OII_params
-    elif line == 'Ha':
-        line_dict = inputs_LIM.THESAN21_Ha_params
-    elif line == 'Hb':
-        line_dict = inputs_LIM.THESAN21_Hb_params
-    else:
-        print('\nLINE NOT IMPLEMENTED YET IN THESAN21')
-        return -1
+def THESAN21(line, dotM, line_dict):
+
+    if line_dict is None:
+        if line == 'OIII':
+            line_dict = inputs_LIM.THESAN21_OIII_params
+        elif line == 'OII':
+            line_dict = inputs_LIM.THESAN21_OII_params
+        elif line == 'Ha':
+            line_dict = inputs_LIM.THESAN21_Ha_params
+        elif line == 'Hb':
+            line_dict = inputs_LIM.THESAN21_Hb_params
+        else:
+            print('\nLINE NOT IMPLEMENTED YET IN THESAN21')
+            return -1
 
     a = line_dict['a']
     ma = line_dict['ma']
@@ -72,13 +75,14 @@ def THESAN21(line, dotM):
 ########################################################
 
 # from arXiv:1711.00798
-def Lagache18(line, dotM, z):
+def Lagache18(line, dotM, z, line_dict):
 
     if line != 'CII':
         print('\nLINE NOT IMPLEMENTED YET IN LAGACHE18')
         return -1
 
-    line_dict = inputs_LIM.Lagache18_CII_params
+    if line_dict is None:
+        line_dict = inputs_LIM.Lagache18_CII_params
 
     alpha_SFR =line_dict['alpha_SFR_0'] + line_dict['alpha_SFR'] * z
 
@@ -100,13 +104,14 @@ def Lagache18(line, dotM, z):
 ########################################################
 
 # from arXiv:2108.07716
-def Yang21(line, massVector, z):
+def Yang21(line, massVector, z, line_dict):
 
     YangEmp_f2 = lambda x1, x2, x3, zz: 1 + x2*z + x3*zz**2
     YangEmp_f1 = lambda x1, x2, x3, zz: x1*np.exp(-zz/x2) + x3
 
     if line == 'CO21':
-        line_dict = inputs_LIM.Yang21_CO21_params
+        if line_dict is None:
+            line_dict = inputs_LIM.Yang21_CO21_params
                     
         logM1 = np.where(z < 4.0,
                         YangEmp_f2(12.12, -0.1704, 0, z),
@@ -173,13 +178,14 @@ def Yang21(line, massVector, z):
 
 
 # from arXiv:1503.08833
-def Li16(line, dotM):
+def Li16(line, dotM, line_dict):
 
-    if line == 'CO21':
-        line_dict = inputs_LIM.Li16_C021_params
-    else:
-        print('\nLINE NOT IMPLEMENTED YET IN LI16')
-        return -1
+    if line_dict is None:
+        if line == 'CO21':
+            line_dict = inputs_LIM.Li16_C021_params
+        else:
+            print('\nLINE NOT IMPLEMENTED YET IN LI16')
+            return -1
 
     alpha = line_dict['alpha']
     beta = line_dict['beta']

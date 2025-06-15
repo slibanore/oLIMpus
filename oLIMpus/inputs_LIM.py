@@ -19,6 +19,7 @@ class LineParams_Input:
                  shot_noise = False, # add shot noise to the LIM power spectrum
 
                  quadratic_lognormal = False, # use 1st or 2nd order in the SFRD and line lognormal approximation MOVE TO USER PARAMS
+                 line_dict = None
                  ):
         
         self.LINE = LINE
@@ -28,8 +29,9 @@ class LineParams_Input:
         self.sigma_LMh = sigma_LMh
         self.shot_noise = shot_noise
 
-        # !!! move to User_Params
         self.quadratic_lognormal = quadratic_lognormal
+
+        self.line_dict = line_dict
 
 
 
@@ -76,6 +78,7 @@ class Line_Parameters:
         # !!! move to User_Params
         self.quadratic_lognormal = LineParams_Input.quadratic_lognormal
 
+        self.line_dict = LineParams_Input.line_dict
 
 ####################
 # Define parameters for some of the models included in the LIM file
