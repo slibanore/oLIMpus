@@ -2,7 +2,7 @@
 ### Auto- and Cross-Power Spectra in the Epoch of Reionization
 
 <p align="center">
-  <img src="plots_paper1/logo.png" alt="oLIMpus Logo" width="200"/>
+  <img src="./plots_paper1/logo.png" alt="oLIMpus Logo" width="200"/>
 </p>
 
 ---
@@ -14,7 +14,7 @@ The 21cm signal is introduced by interfacing oLIMpus with [`Zeus21`](https://git
 ---
 
 <p align="center">
-  <img src="plots_paper1/flowchart.png" alt="oLIMpus Flowchart" width="600"/>
+  <img src="./plots_paper1/flowchart.png" alt="oLIMpus Flowchart" width="600"/>
 </p>
 
 ---
@@ -73,4 +73,4 @@ Ben Gurion University of the Negev
 
 ---
 
-> ⭐ If you use **oLIMpus** in your research, please cite the relevant paper and consider giving this repository a star!
+> ⭐ If you use **oLIMpus** in your research, please cite the relevant papers!
