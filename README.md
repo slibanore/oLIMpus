@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="oLIMpus/logo.jpeg" alt="oLIMpus Logo" width="200"/>
+  <img src="oLIMpus/logo.jpeg" alt="oLIMpus Logo" width="300"/>
 </p>
 
 # oLIMpus: An Effective Model for Line Intensity Mapping Auto- and Cross-Power Spectra in the Epoch of Reionization
@@ -13,7 +13,7 @@ The 21cm signal is introduced by interfacing oLIMpus with [`Zeus21`](https://git
 ---
 
 <p align="center">
-  <img src="oLIMpus/flowchart.jpeg" alt="oLIMpus Flowchart" width="600"/>
+  <img src="oLIMpus/flowchart.jpeg" alt="oLIMpus Flowchart" width="100%"/>
 </p>
 
 ---
