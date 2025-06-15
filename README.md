@@ -1,8 +1,8 @@
-# oLIMpus: An Effective Model for Line Intensity Mapping Auto- and Cross-Power Spectra in the Epoch of Reionization
-
 <p align="center">
   <img src="oLIMpus/logo.jpeg" alt="oLIMpus Logo" width="200"/>
 </p>
+
+# oLIMpus: An Effective Model for Line Intensity Mapping Auto- and Cross-Power Spectra in the Epoch of Reionization
 
 ---
 
