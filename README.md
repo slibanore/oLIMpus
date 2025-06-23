@@ -72,9 +72,9 @@ The authors are committed to keep the two codes updated and compatible once new 
 
 The following notebooks and scripts will help you get started:
 
-- **`oLIMpus.ipynb`** – Compute and visualize the LIM and 21-cm auto- and cross-power spectra  
-- **`explore_parameters.ipynb`** – Explore how the LIM power spectrum depends on different parameters   
-- **`boxes_and_lightcones.ipynb`** – Create coeval boxes and lightcones 
+- **`#1 oLIMpus.ipynb`** – Compute and visualize the LIM and 21-cm auto- and cross-power spectra  
+- **`#2 boxes_and_lightcones.ipynb`** – Create coeval boxes and lightcones 
+- **`#3 explore_parameters.ipynb`** – Explore how the LIM power spectrum depends on different parameters   
 
 > 📌 You can find all tutorials in the `Tutorials/` folder.
 
