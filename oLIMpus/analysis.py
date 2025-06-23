@@ -93,7 +93,7 @@ AstroParams_input_fid = dict(
 "Class to store the quantities needed in the LIM computation and analysis, define in the input list the ones that you want to vary while the others are fiducial"
 class run_oLIMpus:
 
-    def __init__(self, LINE, LINE_MODEL = 'Yang24', _R = 2., shot_noise= False, quadratic_lognormal=True, sigma_LMh = 0., astromodel=0, ZMIN = 5., RSD_MODE = 0, sigma_FoG=0.,\
+    def __init__(self, LINE, LINE_MODEL = 'Yang24', _R = 1., shot_noise= False, quadratic_lognormal=True, sigma_LMh = 0., astromodel=0, ZMIN = 5., RSD_MODE = 0, sigma_FoG=0.,\
         alphastar = 0.5,
         betastar = -0.5,
         epsstar = 0.1,
