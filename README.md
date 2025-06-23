@@ -6,7 +6,7 @@
 
 ---
 
-**oLIMpus** is an actively maintained and expanding Python-based framework for simulating line intensity mapping signals during the Epoch of Reionization (EoR). It provides a fast and efficient way to compute **non-linear power spectra** of star-forming lines, and generates both **coeval boxes** and **lightcones**.
+**oLIMpus** is an actively maintained and expanding Python-based framework for simulating line intensity mapping (LIM) signals during the epoch of reionization (EoR). It provides a fast and efficient way to compute **non-linear power spectra** of star-forming lines, and generates both **coeval boxes** and **lightcones**.
 
 The 21cm signal is introduced by interfacing oLIMpus with [`Zeus21`](https://github.com/JulianBMunoz/Zeus21), a public code for 21cm signal modeling at cosmic dawn. A version of `Zeus21` is included in this repository as a submodule. Note that the original `Zeus21` currently models only the power spectrum during cosmic dawn; support for the reionization era is under active development.
 
@@ -18,22 +18,45 @@ The 21cm signal is introduced by interfacing oLIMpus with [`Zeus21`](https://git
 
 ---
 
+## ⚙️ Installation
+
+We recommend creating a new conda environment when installing the code to avoid dependency conflicts.
+
+To install **oLIMpus**, simply run:
+
+```bash
+pip install .
+```
+in the folder where you downloaded the repository.
+
+⚠️ Note:
+oLIMpus includes its own version of zeus21 as a submodule, last updated in May 2025; later versions of zeus21 may introduce changes that are not compatible with this code. If, for some reason, you want to run oLIMpus with a different Zeus21 version, we suggest to contact us to verify differences between various versions.
+
+The authors are committed to keep the two codes updated and compatible once new milestones are reached on one side or the other. 
+
+
 ## 🔧 Included Modules
 
-- **`olim_power.py`**  
-  Computes auto- and cross-power spectra of various emission lines, including astrophysical nonlinearities and redshift-space distortions.
+- **`inputs_LIM.py`**  
+  Set the input parameters to compute the line luminosity and to set the properties of the power spectrum (e.g., linear/quadratic lognormal, with/without shot noise, with/without RSD).
 
-- **`olim_lightcone.py`**  
-  Constructs lightcone cubes for emission lines across redshift, including interpolation and proper line-of-sight evolution.
+- **`LIM_luminosities.py`**  
+  Default models for the line luminoisty-SFR or -halo mass relations. Default includes models for OIII, OII, Ha, Hb, CII, CO21.
 
-- **`olim_box.py`**  
-  Generates coeval 3D boxes of intensity and density fields at a fixed redshift.
+- **`LIM_modeling.py`**  
+  Compute the quantities needed to setup the model (e.g., the line luminosity density and the coefficients of the lognormal).
 
-- **`zeus21/`** (submodule)  
-  Modified version of [`zeus21`](https://github.com/zeus21/zeus21) used to compute 21cm power spectra and fields during cosmic dawn (reionization modeling in progress).
+- **`correlations_LIM.py`**  
+  Computes auto- and cross-power spectra of various emission lines, including astrophysical nonlinearities, redshift-space distortions, shot noise.
 
-- **`params/`**  
-  Contains example configuration files with cosmological and astrophysical parameters.
+- **`analysis.py`**  
+  Fiducial setup, create a collective class to run oLIMpus and Zeus21 and get consistent outputs.
+
+- **`maps_LIM.py`**  
+  Functions required to produce coeval maps and lightcones.
+
+- **`zeus21_local/zeus21/`** (submodule)  
+  Modified version of [`zeus21`](https://github.com/zeus21/zeus21) used to compute 21cm power spectra and fields during cosmic dawn (reionization modeling in progress). For details, see Zeus21 official documentation. 
 
 ---
 
@@ -41,12 +64,11 @@ The 21cm signal is introduced by interfacing oLIMpus with [`Zeus21`](https://git
 
 The following notebooks and scripts will help you get started:
 
-- **`tutorial_1_power_spectrum.ipynb`** – Compute and visualize the LIM power spectra at given redshifts  
-- **`tutorial_2_lightcone.ipynb`** – Generate a lightcone cube for an emission line  
-- **`tutorial_3_cross_21cm.ipynb`** – Cross-correlate LIM signals with 21cm from `zeus21`  
-- **`tutorial_4_custom_params.ipynb`** – Use custom astrophysical and cosmological parameters
+- **`oLIMpus.ipynb`** – How to compute and visualize the LIM and 21-cm auto- and cross-power spectra  
+- **`explore_parameters.ipynb`** – How to use oLIMpus to explore how the LIM power spectra are affected depend on different parameters   
+- **`boxes_and_lightcones.ipynb`** – How to create coeval boxes and lightcones of the relevant quantities
 
-> 📌 You can find all tutorials in the `tutorials/` folder.
+> 📌 You can find all tutorials in the `Tutorials/` folder.
 
 ---
 
