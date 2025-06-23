@@ -20,10 +20,18 @@ The 21cm signal is introduced by interfacing oLIMpus with [`Zeus21`](https://git
 
 ## ⚙️ Installation
 
-We recommend creating a new conda environment when installing the code to avoid dependency conflicts.
+We recommend creating a new virtual environment based on **python 3.10** when installing the code, to avoid dependency conflicts. Using **anaconda**, this can be done through
+```bash
+  conda create --name oLIMpus python=3.10
 
-To install **oLIMpus**, simply run:
+  conda activate oLIMpus
+```
 
+To install **oLIMpus**, first install **cython**:
+```bash
+pip install cython
+```
+then run:
 ```bash
 pip install .
 ```

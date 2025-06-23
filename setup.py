@@ -14,7 +14,6 @@ setup(
           packages=find_packages(),
           long_description=open('README.md').read(),
           install_requires=[
-           "cython",
            "mcfit",
            "classy",
            "numexpr",
