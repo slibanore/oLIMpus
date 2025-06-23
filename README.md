@@ -20,21 +20,28 @@ The 21cm signal is introduced by interfacing oLIMpus with [`Zeus21`](https://git
 
 ## ⚙️ Installation
 
-We recommend creating a new virtual environment based on **python 3.10** when installing the code, to avoid dependency conflicts. Using **anaconda**, this can be done through
+We recommend creating a new virtual environment based on **python 3.10** when installing the code, to avoid dependency conflicts.
+If you have **conda** in your laptop, you can do it by running the **setup.sh** file through
 ```bash
-  conda create --name oLIMpus python=3.10
-
-  conda activate oLIMpus
+  ./setup_env.sh
 ```
+This will create the conda environment **oLIMpus**, install the code and all dependencies, and install jupyter to run the notebooks. 
 
-To install **oLIMpus**, first install **cython**:
-```bash
-pip install cython
-```
-then, in the folder where you downloaded the repository, run:
+Otherwise, you can install **oLIMpus** in the folder where you downloaded the repository, running:
 ```bash
 pip install .
 ```
+
+If run into problems when pip-installing `classy` (the Python wrapper of `CLASS`). If so, their installation guide is [here](https://github.com/lesgourg/class_public/wiki/Installation), but in short the steps are:
+
+```
+git clone https://github.com/lesgourg/class_public.git class
+cd class/
+make
+cd python/
+python setup.py install --user
+```
+(modifying the Makefile to your `gcc` as needed)
 
 ---
 
