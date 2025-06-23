@@ -21,6 +21,7 @@ setup(
            "pyfftw",
            "powerbox",
            "tqdm",
-           "matplotlib"
+           "matplotlib",
+           "cython"
        ],
 )
