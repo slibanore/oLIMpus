@@ -11,7 +11,7 @@ setup(
           author='Sarah Libanore, Julian B. Muñoz, Ely Kovetz, Yonatan Sklansky, Hector Afonso G. Cruz',
           author_email='libanore@bgu.ac.il',
           #license='MIT',
-          packages=find_packages(),
+          packages=['zeus21_local/zeus21','oLIMpus'], #find_packages(),
           long_description=open('README.md').read(),
           install_requires=[
            "mcfit",
