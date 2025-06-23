@@ -91,8 +91,7 @@ For questions, suggestions, or help using the code, please contact:
 
 **Sarah Libanore**  
 📧 [libanore@bgu.ac.il](mailto:libanore@bgu.ac.il)  
-Ben Gurion University of the Negev
 
 ---
 
-> ⭐ If you use **oLIMpus** in your research, please cite the relevant papers!
+> ⭐ If you use **oLIMpus** in your work, please cite the relevant papers!
