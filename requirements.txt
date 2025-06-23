@@ -1,4 +1,10 @@
-pytest
+pygments>=2.4.1
+future 
+protobuf<3.20,>=3.9.2
+wrapt>=1.11.0
+pexpect>4.3
+requests>=2.21.0,<3
+oauthlib>=3.0.0pytest
 numpy
 scipy
 sphinx
@@ -9,10 +15,3 @@ tqdm
 matplotlib
 powerbox
 pyfftw
-pygments>=2.4.1
-future 
-protobuf<3.20,>=3.9.2
-wrapt>=1.11.0
-pexpect>4.3
-requests>=2.21.0,<3
-oauthlib>=3.0.0
