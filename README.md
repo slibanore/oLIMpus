@@ -31,11 +31,10 @@ To install **oLIMpus**, first install **cython**:
 ```bash
 pip install cython
 ```
-then run:
+then, in the folder where you downloaded the repository, run:
 ```bash
 pip install .
 ```
-in the folder where you downloaded the repository.
 
 ⚠️ Note:
 oLIMpus includes its own version of zeus21 as a submodule, last updated in May 2025; later versions of zeus21 may introduce changes that are not compatible with this code. If, for some reason, you want to run oLIMpus with a different zeus21 version, contact us to verify differences between various versions.
