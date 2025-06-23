@@ -34,6 +34,7 @@ oLIMpus includes its own version of zeus21 as a submodule, last updated in May 2
 
 The authors are committed to keep the two codes updated and compatible once new milestones are reached on one side or the other. 
 
+---
 
 ## 🔧 Included Modules
 
