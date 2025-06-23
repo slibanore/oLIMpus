@@ -8,10 +8,10 @@ setup(
           version='0.1dev',
           description='oLIMpus: cross-correlating lines with Zeus21.',
           url='https://github.com/slibanore/Zeus21',
-          author='Sarah Libanore, Julian B. Muñoz, Ely Kovetz, Yonatan Sklansky, Hector Afonso G. Cruz',
+          author='Sarah Libanore, Julian B. Muñoz, Yonatan Sklansky, Hector Afonso G. Cruz',
           author_email='libanore@bgu.ac.il',
-          #license='MIT',
-          packages=['zeus21_local/zeus21','oLIMpus'], #find_packages(),
+          license='MIT',
+          packages=find_packages(),
           long_description=open('README.md').read(),
           install_requires=[
            "mcfit",
