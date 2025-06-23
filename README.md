@@ -30,7 +30,7 @@ pip install .
 in the folder where you downloaded the repository.
 
 ⚠️ Note:
-oLIMpus includes its own version of zeus21 as a submodule, last updated in May 2025; later versions of zeus21 may introduce changes that are not compatible with this code. If, for some reason, you want to run oLIMpus with a different Zeus21 version, we suggest to contact us to verify differences between various versions.
+oLIMpus includes its own version of zeus21 as a submodule, last updated in May 2025; later versions of zeus21 may introduce changes that are not compatible with this code. If, for some reason, you want to run oLIMpus with a different zeus21 version, contact us to verify differences between various versions.
 
 The authors are committed to keep the two codes updated and compatible once new milestones are reached on one side or the other. 
 
@@ -65,9 +65,9 @@ The authors are committed to keep the two codes updated and compatible once new 
 
 The following notebooks and scripts will help you get started:
 
-- **`oLIMpus.ipynb`** – How to compute and visualize the LIM and 21-cm auto- and cross-power spectra  
-- **`explore_parameters.ipynb`** – How to use oLIMpus to explore how the LIM power spectra are affected depend on different parameters   
-- **`boxes_and_lightcones.ipynb`** – How to create coeval boxes and lightcones of the relevant quantities
+- **`oLIMpus.ipynb`** – Compute and visualize the LIM and 21-cm auto- and cross-power spectra  
+- **`explore_parameters.ipynb`** – Explore how the LIM power spectrum depends on different parameters   
+- **`boxes_and_lightcones.ipynb`** – Create coeval boxes and lightcones 
 
 > 📌 You can find all tutorials in the `Tutorials/` folder.
 
