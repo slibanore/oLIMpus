@@ -13,7 +13,7 @@ The 21cm signal is introduced by interfacing oLIMpus with [`Zeus21`](https://git
 ---
 
 <p align="center">
-  <img src="flowchart.png" alt="oLIMpus Flowchart" width="100%"/>
+  <img src="oLIMpus/flowchart.jpeg" alt="oLIMpus Flowchart" width="100%"/>
 </p>
 
 ---
