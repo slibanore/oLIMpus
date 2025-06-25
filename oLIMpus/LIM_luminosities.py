@@ -1,6 +1,14 @@
 import numpy as np 
 from oLIMpus import inputs_LIM
 
+# scale SFR
+def powerlaw(line, dotM, line_dict):
+
+    L = dotM**line_dict['alpha_SFR']
+    log10_L = np.log10(L)
+
+    return log10_L
+
 ########################################################
 ### UV AND OPTICAL 
 ########################################################

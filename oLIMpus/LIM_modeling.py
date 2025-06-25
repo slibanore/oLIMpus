@@ -155,10 +155,7 @@ class get_LIM_coefficients:
         elif Line_Parameters.OBSERVABLE_LIM == 'Inu':
 
             # c1 = cm / sr / Hz so once is multiplied by rhoL gives Jy/sr
-            if Line_Parameters.LINE_MODEL == 'SFRD':
-                self.coeff1_LIM = np.ones(len(self.zintegral))
-            else:
-                self.coeff1_LIM = ((constants.c_kms * u.km/u.s / (4*np.pi *u.steradian) / (cosmology.Hub(Cosmo_Parameters, self.zintegral) * u.km/u.s/u.Mpc) / (Line_Parameters.nu_rest) * u.Lsun / u.Mpc**3).to(u.Jy/u.steradian)).value
+            self.coeff1_LIM = ((constants.c_kms * u.km/u.s / (4*np.pi *u.steradian) / (cosmology.Hub(Cosmo_Parameters, self.zintegral) * u.km/u.s/u.Mpc) / (Line_Parameters.nu_rest) * u.Lsun / u.Mpc**3).to(u.Jy/u.steradian)).value
         else:
             print('\nCHECK OBSERVABLE FOR LIM!')
             self.coeff1_LIM = -1
@@ -237,22 +234,16 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
 
     # --- #
     # line luminosity computation
-    # 1) equal to the SFR
-    if Line_Parameters.LINE_MODEL == 'SFRD':
-        log10_L = np.log10(dotM)
-
-    # 2) 
+    if Line_Parameters.LINE_MODEL == 'Yang21':
+        log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, massVector, z, Line_Parameters.line_dict)
+    elif Line_Parameters.LINE_MODEL == 'Lagache18':
+        log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, dotM, z, Line_Parameters.line_dict)
     else:
-        if Line_Parameters.LINE_MODEL == 'Yang21':
-            log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, massVector, z, Line_Parameters.line_dict)
-        elif Line_Parameters.LINE_MODEL == 'Lagache18':
-            log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, dotM, z, Line_Parameters.line_dict)
-        else:
-            try:
-                log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, dotM, Line_Parameters.line_dict)
-            except:
-                print('\nLINE MODEL NOT IMPLEMENTED')
-                return -1
+        try:
+            log10_L = getattr(L,Line_Parameters.LINE_MODEL)(Line_Parameters.LINE, dotM, Line_Parameters.line_dict)
+        except:
+            print('\nLINE MODEL NOT IMPLEMENTED')
+            return -1
 
     # --- #
     # stochasticity computation
