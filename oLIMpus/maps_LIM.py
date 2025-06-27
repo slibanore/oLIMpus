@@ -265,7 +265,7 @@ class CoevalBox_percell:
         self.density_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, density_fft))
 
 
-def get_reio_field(zeus_coeff, zeus_corr, Astro_Parameters, Cosmo_Parameters, ClassyCosmo, HMF_interpolator, Lbox=600, Nbox=200, seed=1605, mass_weighted_xHII=False,one_slice=False):
+def get_reio_field(zeus_coeff, zeus_corr, Astro_Parameters, Cosmo_Parameters, ClassyCosmo, HMF_interpolator, Lbox=600, Nbox=200, seed=1605, mass_weighted_xHII=False,include_partlion=True,one_slice=False):
 
     if one_slice:
         print('ONE SLICE STILL TO BE DEBUGGED!')
@@ -273,15 +273,27 @@ def get_reio_field(zeus_coeff, zeus_corr, Astro_Parameters, Cosmo_Parameters, Cl
 
     BMF_val = BMF(zeus_coeff, HMF_interpolator, Cosmo_Parameters, Astro_Parameters, R_linear_sigma_fit_input=10, FLAG_converge=True, max_iter=10, ZMAX_REION = 30)
 
-    reionization_map_binary = reio(Cosmo_Parameters, ClassyCosmo, zeus_corr, zeus_coeff, BMF_val, zeus_coeff.zintegral, 
+    box_reio = reio(Cosmo_Parameters, ClassyCosmo, zeus_corr, zeus_coeff, BMF_val, zeus_coeff.zintegral, 
                 input_boxlength=Lbox, ncells=Nbox, seed=seed, r_precision=1., barrier=None, 
                 PRINT_TIMER=False, ENFORCE_BMF_SCALE=False, 
                 LOGNORMAL_DENSITY=False, COMPUTE_DENSITY_AT_ALLZ=False, SPHERIZE=False, 
-                COMPUTE_MASSWEIGHTED_IONFRAC=mass_weighted_xHII, lowres_massweighting=1,one_slice=one_slice)
+                COMPUTE_MASSWEIGHTED_IONFRAC=mass_weighted_xHII, lowres_massweighting=1,
+                INCLUDE_PARTIALION = include_partlion, COMPUTE_ZREION=False)
     
-    reionization_map_partial, ion_frac_withpartial = partial_ionize(reionization_map_binary.density_allz, reionization_map_binary.ion_field_allz, BMF_val, Cosmo_Parameters,0, mass_weighted_xHII)
+    if include_partlion:
+        reionization_map = box_reio.ion_field_partial_allz
+        if mass_weighted_xHII:
+            ion_frac = box_reio.ion_frac_massweighted_subpixel
+        else:
+            ion_frac = box_reio.ion_frac_subpixel
+    else:
+        reionization_map = box_reio.ion_field_allz
+        if mass_weighted_xHII:
+            ion_frac = box_reio.ion_frac_massweighted
+        else:
+            ion_frac = box_reio.ion_frac
 
-    return reionization_map_partial, ion_frac_withpartial
+    return reionization_map, ion_frac
 
 
 class CoevalBox_T21reionization:
@@ -303,7 +315,7 @@ class CoevalBox_T21reionization:
 
         if MAP_T21_FULL:
 
-            zeus_box = CoevalMaps(zeus_coeff, zeus_pk, z, Lbox, Nbox, KIND=1, seed=seed, one_slice=one_slice)
+            zeus_box = CoevalMaps(zeus_coeff, zeus_pk, z, Lbox, Nbox, KIND=1, seed=seed)
 
             self.T21_map_only = zeus_box.T21map / zeus_coeff.xHI_avg[_iz]
         
@@ -318,23 +330,6 @@ class CoevalBox_T21reionization:
         self.T21_map = self.T21_map_only * self.xH_box
         self.T21_map_only *= zeus_coeff.xHI_avg[_iz]
 
-# !!! towards better model for reionization
-def partial_ionize(dfield, ifield, BMF_class, CosmoParams, ir, mass_weighted_xHII):
-    ifield_full = np.empty(ifield.shape)
-    sample_delta = np.linspace(-5, 5, 201)
-    
-    for i in trange(ifield.shape[0]):
-        nions = BMF_class.nion_delta_r_int(CosmoParams, sample_delta, ir).T[i]
-        nrecs = BMF_class.nrec(CosmoParams, sample_delta, BMF_class.ion_frac).T[i]
-        partial_ifield_spl = spline(sample_delta, nions/(1+nrecs))
-        ifield_full[i] = np.clip(ifield[i] + partial_ifield_spl(dfield[i]), 0, 1)
-
-    if mass_weighted_xHII:
-        ion_frac_withpartial = np.average((1+dfield) * ifield_full, axis=(1, 2, 3))
-    else:
-        ion_frac_withpartial = np.average(ifield_full, axis=(1, 2, 3))
-
-    return ifield_full, ion_frac_withpartial
 
 
 def build_lightcone(which_lightcone,
