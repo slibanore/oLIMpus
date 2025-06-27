@@ -6,7 +6,7 @@
 
 ---
 
-**oLIMpus** is an actively maintained and expanding Python-based framework for simulating line intensity mapping (LIM) signals during the epoch of reionization (EoR). It provides a fast and efficient way to compute **non-linear power spectra** of star-forming lines, and generates both **coeval boxes** and **lightcones**.
+`oLIMpus` is an actively maintained and expanding Python-based framework for simulating line intensity mapping (LIM) signals during the epoch of reionization (EoR). It provides a fast and efficient way to compute **non-linear power spectra** of star-forming lines, and generates both **coeval boxes** and **lightcones**.
 
 The 21cm signal is introduced by interfacing oLIMpus with [`Zeus21`](https://github.com/JulianBMunoz/Zeus21), a public code for 21cm signal modeling at cosmic dawn. A version of `Zeus21` is included in this repository as a submodule. Note that the original `Zeus21` currently models only the power spectrum during cosmic dawn; support for the reionization era is under active development.
 
@@ -21,19 +21,7 @@ The 21cm signal is introduced by interfacing oLIMpus with [`Zeus21`](https://git
 ## ⚙️ Installation
 
 We recommend creating a new virtual environment based on **python 3.10** when installing the code, to avoid dependency conflicts.
-If you have **conda** in your laptop, you can do it by running the **setup.sh** file through
-```bash
-  ./setup_env.sh
-```
-This will create the conda environment **oLIMpus**, install the code and all dependencies, and install jupyter to run the notebooks. 
-
-Otherwise, you can install **oLIMpus** in the folder where you downloaded the repository, running:
-```bash
-pip install .
-```
-
-If run into problems when pip-installing `classy` (the Python wrapper of `CLASS`). If so, their installation guide is [here](https://github.com/lesgourg/class_public/wiki/Installation), but in short the steps are:
-
+If you don't have [`CLASS`] (https://github.com/lesgourg/class_public/) installed in your laptop, first run these lines (modifying the Makefile to your `gcc` as needed):
 ```
 git clone https://github.com/lesgourg/class_public.git class
 cd class/
@@ -41,7 +29,17 @@ make
 cd python/
 python setup.py install --user
 ```
-(modifying the Makefile to your `gcc` as needed)
+
+To install `oLIMpus`, if you have **conda** in your laptop you can simply running the **setup.sh** file through
+```bash
+  ./setup_env.sh
+```
+This will create the conda environment **oLIMpus**, install the code and all dependencies, and install jupyter to run the notebooks. 
+
+Otherwise, you can run the installation in the folder where you downloaded the repository, through:
+```bash
+pip install .
+```
 
 ---
 
