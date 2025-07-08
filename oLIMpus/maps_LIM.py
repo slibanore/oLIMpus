@@ -67,9 +67,9 @@ class CoevalBox_LIM_analytical:
         klist = LIM_Power_Spectrum.klist_PS
 
         Resolution = max(input_Resolution, Line_Parameters._R, Lbox/Nbox)
-        if Resolution != input_Resolution:
-            print('The resolution cannot be smaller than R and Lbox/Nbox')
-            print('Smoothing R changed to ' + str(Resolution))
+        #if Resolution != input_Resolution:
+        #    print('The resolution cannot be smaller than R and Lbox/Nbox')
+        #    print('Smoothing R changed to ' + str(Resolution))
 
         # Produce density box
         if get_density_box:
@@ -101,6 +101,7 @@ class CoevalBox_LIM_analytical:
         )
 
         self.Inu_box_noiseless = pb.delta_x() 
+        self.Inu_box_noiseless[self.Inu_box_noiseless < 0.] = 0.
 
         # create shot noise box
         if Line_Parameters.shot_noise:
@@ -158,9 +159,9 @@ class CoevalBox_percell:
         self.Inu_bar = LIM_coeff.Inu_bar[_iz]
 
         Resolution = max(input_Resolution, Line_Parameters._R, Lbox/Nbox)
-        if Resolution != input_Resolution:
-            print('The resolution cannot be smaller than R and Lbox/Nbox')
-            print('Smoothing R changed to ' + str(Resolution))
+        #if Resolution != input_Resolution:
+        #    print('The resolution cannot be smaller than R and Lbox/Nbox')
+        #    print('Smoothing R changed to ' + str(Resolution))
 
         # get density box 
         density_box_3d = CoevalBox_LIM_analytical(LIM_coeff, LIM_corr, LIM_Power_Spectrum, Line_Parameters, z, input_Resolution, Lbox, Nbox, seed, RSD=0,get_density_box=True,one_slice=one_slice).density_box
@@ -265,7 +266,7 @@ class CoevalBox_percell:
         self.density_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, density_fft))
 
 
-def get_reio_field(zeus_coeff, zeus_corr, Astro_Parameters, Cosmo_Parameters, ClassyCosmo, HMF_interpolator, Lbox=600, Nbox=200, seed=1605, mass_weighted_xHII=False,include_partlion=True,one_slice=False):
+def get_reio_field(zeus_coeff, zeus_corr, Astro_Parameters, Cosmo_Parameters, ClassyCosmo, HMF_interpolator, Lbox=600, Nbox=200, seed=1605, mass_weighted_xHII=False,include_partlion=True,one_slice=False,ENFORCE_BMF_SCALE=False):
 
     if one_slice:
         print('ONE SLICE STILL TO BE DEBUGGED!')
@@ -275,8 +276,8 @@ def get_reio_field(zeus_coeff, zeus_corr, Astro_Parameters, Cosmo_Parameters, Cl
 
     box_reio = reio(Cosmo_Parameters, ClassyCosmo, zeus_corr, zeus_coeff, BMF_val, zeus_coeff.zintegral, 
                 input_boxlength=Lbox, ncells=Nbox, seed=seed, r_precision=1., barrier=None, 
-                PRINT_TIMER=False, ENFORCE_BMF_SCALE=False, 
-                LOGNORMAL_DENSITY=False, COMPUTE_DENSITY_AT_ALLZ=False, SPHERIZE=False, 
+                PRINT_TIMER=False, ENFORCE_BMF_SCALE=ENFORCE_BMF_SCALE, 
+                LOGNORMAL_DENSITY=False, COMPUTE_DENSITY_AT_ALLZ=True, SPHERIZE=False, 
                 COMPUTE_MASSWEIGHTED_IONFRAC=mass_weighted_xHII, lowres_massweighting=1,
                 INCLUDE_PARTIALION = include_partlion, COMPUTE_ZREION=False)
     

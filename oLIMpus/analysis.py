@@ -56,7 +56,7 @@ AstroParams_input_fid = dict(
 
 #############################
         fesc10 = 0.1,
-        alphaesc = 0.,
+        alphaesc = 0., 
         L40_xray = 3.0,
         E0_xray = 500.,
         alpha_xray = -1.0,

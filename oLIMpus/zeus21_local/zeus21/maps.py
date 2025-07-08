@@ -286,12 +286,15 @@ class reionization_maps:
         for i, k in enumerate(klist):
             pk_matter[i] = ClassyCosmo.pk(k, self.z_of_density)
         pk_spl = spline(np.log(klist), np.log(pk_matter))
-    
         #generating density map
         if self.LOGNORMAL_DENSITY:
-            pb = pbox.LogNormalPowerBox(N=self.ncells, dim=3, pk=(lambda k: np.exp(pk_spl(np.log(k)))), boxlength=self.boxlength, seed=self.seed)
+            pb = pbox.LogNormalPowerBox(N=self.ncells, dim=3, 
+                                        pk=(lambda k: np.exp(pk_spl(np.log(k)))),
+                                        boxlength=self.boxlength, seed=self.seed)
         else:
-            pb = pbox.PowerBox(N=self.ncells, dim=3, pk=(lambda k: np.exp(pk_spl(np.log(k)))), boxlength=self.boxlength, seed=self.seed)
+            pb = pbox.PowerBox(N=self.ncells, dim=3, 
+                               pk=(lambda k: np.exp(pk_spl(np.log(k)))), 
+                               boxlength=self.boxlength, seed=self.seed)
         density_field = pb.delta_x()
 
         if self.PRINT_TIMER:
