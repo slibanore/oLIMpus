@@ -9,10 +9,10 @@ conda create --name oLIMpus python=3.10
 conda activate oLIMpus
 
 # Install required Python packages
-pip install cython 
-pip install ipykernel 
-pip install pygments 
-pip install pexpect 
+conda install cython 
+conda install ipykernel 
+conda install pygments 
+conda install pexpect 
 pip install .
 
 echo "Conda environment 'oLIMpus' is set up and packages are installed."

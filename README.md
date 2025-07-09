@@ -32,6 +32,7 @@ python setup.py install --user
 
 To install `oLIMpus`, if you have **conda** in your laptop you can simply running the **setup.sh** file through
 ```bash
+  chmod 755 setup_env.sh 
   ./setup_env.sh
 ```
 This will create the conda environment **oLIMpus**, install the code and all dependencies, and install jupyter to run the notebooks. 
