@@ -234,8 +234,11 @@ class reionization_maps:
         self.z = CoeffStructure.zintegral[self._z_idx]
         # radii
         self.r_precision = r_precision
-        self._r_idx = np.linspace(0, len(CoeffStructure.Rtabsmoo)-1, int(len(CoeffStructure.Rtabsmoo)*self.r_precision), dtype=int)
-        self.r = CoeffStructure.Rtabsmoo[self._r_idx]
+        self._r_idx_all = np.linspace(0, len(CoeffStructure.Rtabsmoo)-1, int(len(CoeffStructure.Rtabsmoo)*self.r_precision), dtype=int)
+        self.r_all = CoeffStructure.Rtabsmoo[self._r_idx_all]
+
+        self.r = self.r_all[self.r_all >= self.boxlength/self.ncells/(CoeffStructure.Rtabsmoo[0] * (4*np.pi/3)**(1/3))]
+        self._r_idx = self._r_idx_all[self.r_all >= self.boxlength/self.ncells/(CoeffStructure.Rtabsmoo[0] * (4*np.pi/3)**(1/3))]
 
         ### generating the density field at the closest redshift to the lower one inputed
         self.z_of_density = self.z[0]
@@ -255,7 +258,7 @@ class reionization_maps:
         self.ion_field_allz = self.generate_xHII(CosmoParams, CoeffStructure, BMF)
         self.ion_frac = self.compute_volumeweigthed_xHII(self.ion_field_allz)
         if self.INCLUDE_PARTIALION:
-            self.ion_field_partial_allz = self.generate_xHII_withPartialIonization(CosmoParams, BMF)
+            self.ion_field_partial_allz = self.generate_xHII_withPartialIonization(CosmoParams, BMF,ir=self._r_idx[0])
             self.ion_frac_subpixel = self.compute_volumeweigthed_xHII(self.ion_field_partial_allz)
 
         ### computing the mass weighted ionized fraction
