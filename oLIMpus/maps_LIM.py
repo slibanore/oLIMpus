@@ -7,7 +7,11 @@ BGU - April 2025
 import numpy as np 
 import powerbox as pbox
 from scipy.interpolate import interp1d
-from oLIMpus import z21_utilities, sfrd, LineLuminosity, CoevalMaps, BMF, cosmology
+from oLIMpus import z21_utilities, sfrd, LineLuminosity, cosmology
+try:
+    from oLIMpus import BMF
+except:
+    print('The reionization.py file is not yet public')
 from oLIMpus.zeus21_local.zeus21.maps import reionization_maps as reio
 import numexpr as ne 
 from scipy.interpolate import InterpolatedUnivariateSpline as spline
