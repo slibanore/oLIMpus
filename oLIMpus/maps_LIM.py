@@ -7,7 +7,7 @@ BGU - April 2025
 import numpy as np 
 import powerbox as pbox
 from scipy.interpolate import interp1d
-from oLIMpus import z21_utilities, sfrd, LineLuminosity, CoevalMaps, BMF
+from oLIMpus import z21_utilities, sfrd, LineLuminosity, CoevalMaps, BMF, cosmology
 from oLIMpus.zeus21_local.zeus21.maps import reionization_maps as reio
 import numexpr as ne 
 from scipy.interpolate import InterpolatedUnivariateSpline as spline
@@ -297,10 +297,104 @@ def get_reio_field(zeus_coeff, zeus_corr, Astro_Parameters, Cosmo_Parameters, Cl
     return reionization_map, ion_frac
 
 
+class CoevalMaps_T21noreionization:
+    "Class that calculates and keeps coeval maps, one z at a time."
+
+    def __init__(self, T21_coefficients, Power_Spectrum, z, CosmoParams, Lbox=600, Nbox=200, KIND=None, seed=1605):
+        'the KIND flag determines the kind of map you make. Options are:'
+        'KIND = 0, only T21 lognormal. OK approximation'
+        'KIND = 1, density and T21 correlated. T21 has a gaussian and a lognormal component. Decent approximation'
+        'KIND = 2, all maps'
+        'KIND = 3, same as 2 but integrating over all R. Slow but most accurate'
+
+        zlist = T21_coefficients.zintegral 
+        _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
+        self.T21global = (cosmology.T021(CosmoParams,T21_coefficients.zintegral) * T21_coefficients.xa_avg/(1.0 + T21_coefficients.xa_avg) * (1.0 - T21_coefficients.T_CMB * T21_coefficients.invTcol_avg))[_iz]
+        
+
+        self.Nbox = Nbox
+        self.Lbox = Lbox
+        self.seed = seed
+        self.z = zlist[_iz] #will be slightly different from z input
+
+        klist = Power_Spectrum.klist_PS
+        k3over2pi2 = klist**3/(2*np.pi**2)
+
+
+        if (KIND == 0): #just T21, ~gaussian
+                
+            P21 = Power_Spectrum.Deltasq_T21_lin[_iz]/k3over2pi2
+            P21norminterp = interp1d(klist,P21/self.T21global**2,fill_value=0.0,bounds_error=False)
+
+
+            pb = pbox.PowerBox(
+                N=self.Nbox,                     
+                dim=3,                     
+                pk = lambda k: P21norminterp(k), 
+                boxlength = self.Lbox,           
+                seed = self.seed                
+            )
+
+            self.T21map = self.T21global * (1 + pb.delta_x() )
+            self.deltamap = None
+
+
+            
+        elif (KIND == 1):
+            Pd = Power_Spectrum.Deltasq_d_lin[_iz,:]/k3over2pi2
+            Pdinterp = interp1d(klist,Pd,fill_value=0.0,bounds_error=False)
+
+            pb = pbox.PowerBox(
+                N=self.Nbox,                     
+                dim=3,                     
+                pk = lambda k: Pdinterp(k), 
+                boxlength = self.Lbox,           
+                seed = self.seed               
+            )
+
+            self.deltamap = pb.delta_x() #density map, basis of this KIND of approach
+
+            #then we make a map of the linear T21 fluctuation, better to use the cross to keep sign, at linear level same 
+            PdT21 = Power_Spectrum.Deltasq_dT21[_iz]/k3over2pi2
+
+            powerratioint = interp1d(klist,PdT21/Pd,fill_value=0.0,bounds_error=False)
+
+
+            deltak = pb.delta_k()
+
+            powerratio = powerratioint(pb.k())
+            T21lin_k = powerratio * deltak
+            self.T21maplin= self.T21global + z21_utilities.powerboxCtoR(pb,mapkin = T21lin_k)
+
+            #now make a nonlinear correction, built as \sum_R [e^(gR dR) - gR dR]. Uncorrelatd with all dR so just a separate field!
+            #NOTE: its not guaranteed to work, excess power can be negative in some cases! Not for each component xa, Tk, but yes for T21
+            excesspower21 = (Power_Spectrum.Deltasq_T21[_iz,:]-Power_Spectrum.Deltasq_T21_lin[_iz,:])/k3over2pi2
+
+            lognormpower = interp1d(klist,excesspower21/self.T21global**2,fill_value=0.0,bounds_error=False)
+            #G or logG? TODO revisit
+            pbe = pbox.LogNormalPowerBox(
+                N=self.Nbox,                     
+                dim=3,                     
+                pk = lambda k: lognormpower(k), 
+                boxlength = self.Lbox,           
+                seed = self.seed+1                # uncorrelated
+            )
+
+            self.T21mapNL = self.T21global*pbe.delta_x()
+
+            #and finally, just add them together!
+            self.T21map = self.T21maplin +  self.T21mapNL
+
+
+
+        else:
+            print('ERROR, KIND not implemented yet!')
+
+
 class CoevalBox_T21reionization:
     "Re-build the 21cm temperature map combining the xalpha, Tk and delta for more stability in the non-linear fluctuation computation. Include the xH contribution"
 
-    def __init__(self, zeus_coeff, zeus_pk, z, reionization_map_partial, ion_frac_withpartial, Lbox=600, Nbox=200, seed=1605, MAP_T21_FULL = True, one_slice=False):
+    def __init__(self, zeus_coeff, zeus_pk, z, reionization_map_partial, ion_frac_withpartial, CosmoParams, Lbox=600, Nbox=200, seed=1605, MAP_T21_FULL = True, one_slice=False):
 
         if one_slice:
             print('ONE SLICE STILL TO BE DEBUGGED!')
@@ -316,10 +410,9 @@ class CoevalBox_T21reionization:
 
         if MAP_T21_FULL:
 
-            zeus_box = CoevalMaps(zeus_coeff, zeus_pk, z, Lbox, Nbox, KIND=1, seed=seed)
+            zeus_box = CoevalMaps_T21noreionization(zeus_coeff, zeus_pk, z, CosmoParams, Lbox, Nbox, KIND=1, seed=seed)
 
-            self.T21_map_only = zeus_box.T21map / zeus_coeff.xHI_avg[_iz]
-        
+            self.T21_map_only = zeus_box.T21map 
  
         else:
             print('T21 by ingredients not yet implemented') 
@@ -420,9 +513,9 @@ def lightcone_single_z(zi, zvals, Lbox, Nbox, Resolution, seed, which_lightcone,
                 print('Warning! The T21 map is only  analytical, except for the bubble part')
 
         if which_lightcone == 'T21_only':
-            box = CoevalBox_T21reionization(coefficients_21,PS21,zi,reionization_map_partial, ion_frac_withpartial,Lbox,Nbox,seed,MAP_T21_FULL=True,).T21_map_only
+            box = CoevalBox_T21reionization(coefficients_21,PS21,zi,reionization_map_partial, ion_frac_withpartial,CosmoParams,Lbox,Nbox,seed,MAP_T21_FULL=True,).T21_map_only
         else:
-            box = CoevalBox_T21reionization(coefficients_21,PS21,zi,reionization_map_partial, ion_frac_withpartial,Lbox,Nbox,seed,MAP_T21_FULL=True,).T21_map
+            box = CoevalBox_T21reionization(coefficients_21,PS21,zi,reionization_map_partial, ion_frac_withpartial,CosmoParams,Lbox,Nbox,seed,MAP_T21_FULL=True,).T21_map
 
     elif which_lightcone == 'density':
         if not analytical and zi == zvals[0]:
@@ -434,7 +527,7 @@ def lightcone_single_z(zi, zvals, Lbox, Nbox, Resolution, seed, which_lightcone,
         if analytical and zi == zvals[0]:
             print('Warning! The xHI map cannot be computed analytically')
 
-        box = CoevalBox_T21reionization(coefficients_21,PS21,zi,reionization_map_partial, ion_frac_withpartial,Lbox,Nbox,seed,MAP_T21_FULL=True).xH_box
+        box = CoevalBox_T21reionization(coefficients_21,PS21,zi,reionization_map_partial, ion_frac_withpartial,CosmoParams,Lbox,Nbox,seed,MAP_T21_FULL=True).xH_box
 
     elif which_lightcone == 'SFRD':
         box = CoevalBox_percell( LIM_coeff, LIM_corr, PSLIM, coefficients_21, LineParams, AstroParams, CosmoParams, HMFintclass, zi, Resolution, Lbox, Nbox, seed,one_slice=False).SFRD_box
