@@ -2,13 +2,13 @@
   <img src="oLIMpus/logo.jpeg" alt="oLIMpus Logo" width="300"/>
 </p>
 
-# oLIMpus: An Effective Model for Line Intensity Mapping Auto- and Cross-Power Spectra in the Epoch of Reionization
+# oLIMpus: An Effective Model for Line Intensity Mapping Auto- and Cross- Power Spectra in Cosmic Dawn and Reionization
 
 ---
 
 `oLIMpus` is an actively maintained and expanding Python-based framework for simulating line intensity mapping (LIM) signals during the epoch of reionization (EoR). It provides a fast and efficient way to compute **non-linear power spectra** of star-forming lines, and generates both **coeval boxes** and **lightcones**.
 
-The 21cm signal is introduced by interfacing oLIMpus with [`Zeus21`](https://github.com/JulianBMunoz/Zeus21), a public code for 21cm signal modeling at cosmic dawn. A version of `Zeus21` is included in this repository as a submodule. Note that the original `Zeus21` currently models only the power spectrum during cosmic dawn; support for the reionization era is under active development.
+The 21-cm signal is introduced by interfacing oLIMpus with [`Zeus21`](https://github.com/JulianBMunoz/Zeus21), a public code for 21-cm signal modeling at cosmic dawn. A version of `Zeus21` is included in this repository as a submodule. Note that the original `Zeus21` currently models only the power spectrum during cosmic dawn; support for the reionization era is under active development.
 
 ---
 
@@ -21,7 +21,7 @@ The 21cm signal is introduced by interfacing oLIMpus with [`Zeus21`](https://git
 ## ⚙️ Installation
 
 We recommend creating a new virtual environment based on **python 3.10** when installing the code, to avoid dependency conflicts.
-If you don't have [`CLASS`] (https://github.com/lesgourg/class_public/) installed in your laptop, first run these lines (modifying the Makefile to your `gcc` as needed):
+If you don't have [`CLASS`](https://github.com/lesgourg/class_public/) installed in your laptop, first run these lines (modifying the Makefile to your `gcc` as needed):
 ```
 git clone https://github.com/lesgourg/class_public.git class
 cd class/
@@ -30,7 +30,7 @@ cd python/
 python setup.py install --user
 ```
 
-To install `oLIMpus`, if you have **conda** in your laptop you can simply running the **setup.sh** file through
+To install `oLIMpus`, if you have **conda** in your laptop you can simply run the **setup.sh** file through
 ```bash
   chmod 755 setup_env.sh 
   ./setup_env.sh
@@ -46,7 +46,7 @@ pip install .
 
 > ⚠️ Note
 
-> oLIMpus includes its own version of zeus21 as a submodule, last updated in May 2025; later versions of zeus21 may introduce changes that are not compatible > with this code. If, for some reason, you want to run oLIMpus with a different zeus21 version, contact us to verify differences between various versions.
+> oLIMpus includes its own version of Zeus21 as a submodule, last updated in June 2025; later versions of Zeus21 may introduce changes that are not compatible with this code. If, for some reason, you want to run oLIMpus with a different Zeus21 version, contact us to verify differences between various versions.
 
 > The authors are committed to keep the two codes updated and compatible once new milestones are reached on one side or the other. 
 
@@ -73,7 +73,7 @@ pip install .
   Functions required to produce coeval maps and lightcones.
 
 - **`zeus21_local/zeus21/`** (submodule)  
-  Modified version of [`zeus21`](https://github.com/zeus21/zeus21) used to compute 21cm power spectra and fields during cosmic dawn (reionization modeling in progress). For details, see Zeus21 official documentation. 
+  Modified version of [`Zeus21`](https://github.com/zeus21/zeus21) used to compute 21-cm power spectra and fields during cosmic dawn (reionization modeling in progress). For details, see Zeus21 official documentation. 
 
 ---
 
@@ -91,7 +91,7 @@ The following notebooks and scripts will help you get started:
 
 ## 📄 Relevant Publications
 
-- Libanore, Mu&ntilde;oz and Kovetz, *oLIMpus: An Effective Model for Line Intensity Mapping Auto- and Cross-Power Spectra in the Epoch of Reionization*, [arXiv:2506.YYYYY](https://arxiv.org/abs/2506.YYYYY)
+- Libanore, Mu&ntilde;oz and Kovetz, *oLIMpus: An Effective Model for Line Intensity Mapping Auto- and Cross- Power Spectra in Cosmic Dawn and Reionization*, [arXiv:2507.15922](https://arxiv.org/abs/2507.15922)
 
 - Mu&ntilde;oz, *An Effective Model for the Cosmic-Dawn 21-cm Signal*, [arXiv:2302.08506](https://arxiv.org/abs/2302.08506)
 
