@@ -117,7 +117,7 @@ class CoevalBox_LIM_analytical:
                 dim=2 if one_slice else 3,                     
                 pk = lambda k: Pshot_interp(k), 
                 boxlength = self.Lbox,           
-                seed = self.seed+1, # uncorrelated from the density field
+                seed = self.seed+2, # uncorrelated from the density field
             )
 
             self.shotnoise_box = pb_shot.delta_x() # shot noise box
@@ -244,7 +244,7 @@ class CoevalBox_percell:
                 dim=3,                     
                 pk = lambda k: Pshot_interp(k), 
                 boxlength = self.Lbox,           
-                seed = self.seed+1, # uncorrelated from the density field
+                seed = self.seed+3, # uncorrelated from the density field
             )
 
             self.shotnoise_box = pb_shot.delta_x() # shot noise box
