@@ -104,7 +104,7 @@ class CoevalBox_LIM_analytical:
             seed = self.seed,
         )
 
-        self.Inu_box_noiseless = pb.delta_x() 
+        self.Inu_box_noiseless = pb.delta_x() + self.Inu_bar
 
         # create shot noise box
         if Line_Parameters.shot_noise:
