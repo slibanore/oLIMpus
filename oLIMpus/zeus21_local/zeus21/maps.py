@@ -32,6 +32,7 @@ class CoevalMaps:
 
         zlist = T21_coefficients.zintegral 
         _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
+        self.T21global_noR = T21_coefficients.T21avg_noR[_iz]
         self.T21global = T21_coefficients.T21avg[_iz]
         self.Nbox = Nbox
         self.Lbox = Lbox
@@ -45,7 +46,7 @@ class CoevalMaps:
         if (KIND == 0): #just T21, ~gaussian
                 
             P21 = Power_Spectrum.Deltasq_T21_lin[_iz]/k3over2pi2
-            P21norminterp = interp1d(klist,P21/self.T21global**2,fill_value=0.0,bounds_error=False)
+            P21norminterp = interp1d(klist,P21/self.T21global_noR**2,fill_value=0.0,bounds_error=False)
 
 
             pb = pbox.PowerBox(
@@ -91,7 +92,7 @@ class CoevalMaps:
             #NOTE: its not guaranteed to work, excess power can be negative in some cases! Not for each component xa, Tk, but yes for T21
             excesspower21 = (Power_Spectrum.Deltasq_T21[_iz,:]-Power_Spectrum.Deltasq_T21_lin[_iz,:])/k3over2pi2
 
-            lognormpower = interp1d(klist,excesspower21/self.T21global**2,fill_value=0.0,bounds_error=False)
+            lognormpower = interp1d(klist,excesspower21/self.T21global_noR**2,fill_value=0.0,bounds_error=False)
             #G or logG? TODO revisit
             pbe = pbox.LogNormalPowerBox(
                 N=self.Nbox,                     
@@ -384,6 +385,10 @@ class reionization_maps:
             nrec_spl = spline(sample_d, BMF.nrec(CosmoParams, sample_d, BMF.ion_frac).T[curr_z_idx])
             partial_ion_spl = spline(sample_d, nion_spl(sample_d)/(1+nrec_spl(sample_d)))
             partialion_field[i] = partial_ion_spl(self.density_allz[i])
+            # !!!! SL 
+            #partialion_field[i][partialion_field[i] < 1e-2] = 0.
+            #partialion_field[i][np.round(1-partialion_field[i],2) == 0.99] = 0.
+            # !!!!
         ion_field_partial_allz = np.clip(self.ion_field_allz + partialion_field, 0, 1)
 
         if self.PRINT_TIMER:
