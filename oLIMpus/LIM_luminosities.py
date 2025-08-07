@@ -114,7 +114,7 @@ def Lagache18(line, dotM, z, line_dict):
 # from arXiv:2108.07716
 def Yang21(line, massVector, z, line_dict):
 
-    YangEmp_f2 = lambda x1, x2, x3, zz: 1 + x2*z + x3*zz**2
+    YangEmp_f2 = lambda x1, x2, x3, zz: x1 + x2*z + x3*zz**2
     YangEmp_f1 = lambda x1, x2, x3, zz: x1*np.exp(-zz/x2) + x3
 
     if line == 'CO21':

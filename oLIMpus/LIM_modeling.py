@@ -253,7 +253,7 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
 
         sigma_L = Line_Parameters.sigma_LMh
         if Line_Parameters.LINE_MODEL == 'Li16':
-            sigma_L = (Line_Parameters.sigma_LMh**2 + (inputs_LIM.Li16_C021_params['sig_SFR'].value*np.log(10))**2/inputs_LIM.Li16_C021_params['alpha']**2)**0.5
+            sigma_L = (Line_Parameters.sigma_LMh**2 + (Line_Parameters.sig_SFR.value*np.log(10))**2/Line_Parameters.alpha**2)**0.5
 
         log_muL = np.log(10**log10_L) 
         log_muL[abs(log10_L) == np.inf] = 0.
