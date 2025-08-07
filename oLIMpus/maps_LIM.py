@@ -379,7 +379,7 @@ class CoevalMaps_T21noreionization:
 class CoevalBox_T21reionization:
     "Re-build the 21cm temperature map combining the xalpha, Tk and delta for more stability in the non-linear fluctuation computation. Include the xH contribution"
 
-    def __init__(self, zeus_coeff, zeus_pk, z, reionization_map_partial, ion_frac_withpartial, Lbox=600, Nbox=200, seed=1605, MAP_T21_FULL = True, one_slice=False):
+    def __init__(self, zeus_coeff, zeus_pk, z, reionization_map_partial, ion_frac_withpartial, Lbox=600, Nbox=200, seed=1605, MAP_T21_FULL = True, one_slice=False, input_Resolution = None):
 
         if one_slice:
             print('ONE SLICE STILL TO BE DEBUGGED!')
@@ -407,6 +407,12 @@ class CoevalBox_T21reionization:
             #self.T21_map_only = cosmology.T021(Cosmo_Parameters,zeus_coeff.zintegral) * self.xa_map/(1.0 + self.xa_map) * (1.0 - zeus_coeff.T_CMB * (self.invTcol_map)) 
 
         self.T21_map = self.T21_map_only * self.xH_box
+
+        if input_Resolution != None:
+            klistfftx = np.fft.fftfreq(self.T21_map.shape[0],Lbox/Nbox)*2*np.pi
+            klist3Dfft = np.sqrt(np.sum(np.meshgrid(klistfftx**2, klistfftx**2, klistfftx**2, indexing='ij'), axis=0))
+            T21_fft = np.fft.fftn(self.T21_map)
+            self.T21_map = np.array(z21_utilities.tophat_smooth(input_Resolution, klist3Dfft, T21_fft))
 
 
 
