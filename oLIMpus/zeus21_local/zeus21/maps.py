@@ -386,8 +386,8 @@ class reionization_maps:
             partial_ion_spl = spline(sample_d, nion_spl(sample_d)/(1+nrec_spl(sample_d)))
             partialion_field[i] = partial_ion_spl(self.density_allz[i])
             # !!!! SL 
-            partialion_field[i][partialion_field[i] < 1e-4] = 0.
-            partialion_field[i][np.round(1-partialion_field[i],2) == 0.99] = 0.
+            #partialion_field[i][partialion_field[i] < 1e-5] = 0.
+            #partialion_field[i][np.round(1-partialion_field[i],2) == 0.99] = 0.
             # !!!!
         ion_field_partial_allz = np.clip(self.ion_field_allz + partialion_field, 0, 1)
 
