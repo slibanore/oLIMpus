@@ -205,6 +205,13 @@ def Li16(line, dotM, line_dict):
     L_IR = 10**log10_SFR / (dMF*1e-10)
     Lprime = (10.**-beta * L_IR)**(1./alpha)
 
-    log10_L = np.log10(L0*Lprime)
+    if line == 'CO21': # 2-1 transition
+        lambda_line = 1.3e7*inputs_LIM.u.AA 
+    elif line == 'CO10': # 2-1 transition
+        lambda_line = 2.6e7*inputs_LIM.u.AA 
+    nu_rest = (inputs_LIM.cu.c / (lambda_line)).to(inputs_LIM.u.GHz) # rest frame frequency in Hz 
+    scale_nu = nu_rest/(115*inputs_LIM.u.GHz)
+
+    log10_L = np.log10(L0*Lprime*scale_nu**3)
 
     return log10_L
