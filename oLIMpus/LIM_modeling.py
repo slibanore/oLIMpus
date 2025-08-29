@@ -45,11 +45,19 @@ class get_LIM_coefficients:
         # average luminosity density in Lagrangian space
         rhoL_avg_longer = np.trapz(rhoL_integrand(False, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HMF_interpolator, mArray_LIM, zLIM), HMF_interpolator.logtabMh, axis = 1) 
 
+        if Line_Parameters.stoch_type == 'mean' and Line_Parameters.LINE_MODEL == 'Li16':
+            if Line_Parameters.line_dict is None:
+                line_dict = inputs_LIM.Li16_C021_params
+            else:
+                line_dict = Line_Parameters.line_dict
+
+            rhoL_avg_longer *= np.exp((line_dict['alpha']**-2-line_dict['alpha']**-1)*line_dict['sigma_SFR'].value**2*np.log(10)**2/2.)
+
         rhoL_interp = sfrd.interpolate.interp1d(zLIM_longer, rhoL_avg_longer, kind = 'cubic', bounds_error = False, fill_value = 0,) 
 
         # in the z array of interest
         self.rhoL_avg = rhoL_interp(self.zintegral) # Lagrangian ST
-        self.rhoL_bar = rhoL_interp(self.zintegral) # this will be converted to EPS and to Eulerian
+        self.rhoL_bar =  rhoL_interp(self.zintegral) # this will be converted to EPS and to Eulerian
 
     ### STEP 2: Broadcasted Prescription to compute gammas
 
@@ -210,6 +218,19 @@ def P_shot_noise_integrand(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parame
 
     integrand_P_shot_noise = dndlogM**-1 * (dndlogM * Ltab_curr)**2  # units Lsun2 Mpc-3 because of the delta Dirac ? 
 
+    if Line_Parameters.stoch_type == 'mean':
+        
+        integrand_P_shot_noise *= np.exp(Line_Parameters.sigma_LMh.value**2*np.log(10)**2)
+
+        if Line_Parameters.LINE_MODEL == 'Li16':
+            if Line_Parameters.line_dict is None:
+                line_dict = inputs_LIM.Li16_C021_params
+            else:
+                line_dict = Line_Parameters.line_dict
+
+            integrand_P_shot_noise *= np.exp((2.*line_dict['alpha']**-2-line_dict['alpha']**-1)*line_dict['sigma_SFR'].value**2*np.log(10)**2)
+
+
     return integrand_P_shot_noise
 
 
@@ -247,13 +268,22 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
 
     # --- #
     # stochasticity computation
-    if Line_Parameters.sigma_LMh == 0.:
+    if Line_Parameters.sigma_LMh == 0. or Line_Parameters.stoch_type == 'mean':
         L_of_Mh = 10.**log10_L
     else:
 
-        sigma_L = Line_Parameters.sigma_LMh
         if Line_Parameters.LINE_MODEL == 'Li16':
-            sigma_L = (Line_Parameters.sigma_LMh**2 + (Line_Parameters.sig_SFR.value*np.log(10))**2/Line_Parameters.alpha**2)**0.5
+            if Line_Parameters.line_dict is None:
+                line_dict = inputs_LIM.Li16_C021_params
+            else:
+                line_dict = Line_Parameters.line_dict
+
+            sigma_L = (Line_Parameters.sigma_LMh.value**2 + (line_dict['sigma_SFR'].value/line_dict['alpha'])**2)**0.5
+
+        else:
+            sigma_L = Line_Parameters.sigma_LMh.value
+    
+        sigma_L = sigma_L * np.log(10)
 
         log_muL = np.log(10**log10_L) 
         log_muL[abs(log10_L) == np.inf] = 0.
@@ -272,6 +302,5 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
         p_logL[p_logL < 1e-50] = 0.
 
         L_of_Mh = simpson(p_logL * Lval, Lval, axis=0)
-
 
     return L_of_Mh

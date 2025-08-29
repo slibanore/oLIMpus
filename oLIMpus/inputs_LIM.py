@@ -15,6 +15,7 @@ class LineParams_Input:
                  LINE_MODEL = 'SFRD', # model of the line luminosity
                  OBSERVABLE_LIM = 'Inu', # observe intensity in Jy/sr or mK
                  _R = 0.5, # resolution for smoothing
+                 stoch_type = 'median',
                  sigma_LMh = 0., # stochasticity in the L-Mh relation
                  shot_noise = False, # add shot noise to the LIM power spectrum
 
@@ -26,6 +27,7 @@ class LineParams_Input:
         self.OBSERVABLE_LIM = OBSERVABLE_LIM
         self._R = _R
         self.LINE_MODEL = LINE_MODEL
+        self.stoch_type = stoch_type
         self.sigma_LMh = sigma_LMh
         self.shot_noise = shot_noise
 
@@ -69,10 +71,10 @@ class Line_Parameters:
             self._R = LineParams_Input._R 
 
         self.LINE_MODEL = LineParams_Input.LINE_MODEL 
-        try:
-            self.sigma_LMh = LineParams_Input.sigma_LMh.value*np.log(10) if LineParams_Input.sigma_LMh.unit == u.dex else LineParams_Input.sigma_LMh
-        except:
-            self.sigma_LMh = LineParams_Input.sigma_LMh
+        self.stoch_type = LineParams_Input.stoch_type
+        self.sigma_LMh = LineParams_Input.sigma_LMh
+        if self.sigma_LMh != 0.:
+            print('You introduced stochasticity: be sure that sigma_LMh is in dex')
         self.shot_noise = LineParams_Input.shot_noise
 
         # !!! move to User_Params
