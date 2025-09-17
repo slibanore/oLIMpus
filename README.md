@@ -93,6 +93,8 @@ The following notebooks and scripts will help you get started:
 
 - Libanore, Mu&ntilde;oz and Kovetz, *oLIMpus: An Effective Model for Line Intensity Mapping Auto- and Cross- Power Spectra in Cosmic Dawn and Reionization*, [arXiv:2507.15922](https://arxiv.org/abs/2507.15922)
 
+- Libanore, Kovetz, Mu&ntilde;oz, Sklansky, Thélie, *A New Boundary Condition on Reionization*,[arXiv:2509.08886](https://arxiv.org/abs/2509.08886)
+
 - Mu&ntilde;oz, *An Effective Model for the Cosmic-Dawn 21-cm Signal*, [arXiv:2302.08506](https://arxiv.org/abs/2302.08506)
 
 - Sklanksy et al., *In preparation*
