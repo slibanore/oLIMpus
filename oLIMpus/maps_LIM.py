@@ -53,11 +53,7 @@ class CoevalBox_LIM_analytical:
     "Class that calculates and keeps coeval maps, one z at a time."
     "The computation is done analytically based on the estimated density and LIM power spectra"
 
-    def __init__(self, LIM_coeff, LIM_corr, LIM_Power_Spectrum, Line_Parameters, z, input_Resolution, Lbox=600, Nbox=200, seed=1605, RSD=0, get_density_box = True, one_slice = False):
-
-        if one_slice:
-            print('ONE SLICE STILL TO BE DEBUGGED!')
-            one_slice = False
+    def __init__(self, LIM_coeff, LIM_corr, LIM_Power_Spectrum, Line_Parameters, z, input_Resolution, Lbox=600, Nbox=200, seed=1605, RSD=0, get_density_box = True):
 
         zlist = LIM_coeff.zintegral 
         _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
@@ -83,7 +79,7 @@ class CoevalBox_LIM_analytical:
 
             pb_delta = pbox.PowerBox(
                 N=self.Nbox,                     
-                dim=2 if one_slice else 3,                     
+                dim= 3,                     
                 pk = lambda k: Pm_interp(k), 
                 boxlength = self.Lbox,           
                 seed = self.seed,
@@ -98,7 +94,7 @@ class CoevalBox_LIM_analytical:
 
         pb = pbox.PowerBox(
             N=self.Nbox,                     
-            dim=2 if one_slice else 3,                     
+            dim= 3,                     
             pk = lambda k: Pnu_interp(k), 
             boxlength = self.Lbox,           
             seed = self.seed,
@@ -113,7 +109,7 @@ class CoevalBox_LIM_analytical:
 
             pb_shot = pbox.PowerBox(
                 N=self.Nbox,                     
-                dim=2 if one_slice else 3,                     
+                dim= 3,                     
                 pk = lambda k: Pshot_interp(k), 
                 boxlength = self.Lbox,           
                 seed = self.seed+2, # uncorrelated from the density field
@@ -145,11 +141,7 @@ class CoevalBox_LIM_analytical:
 class CoevalBox_percell:
     "Produce maps by computing the LIM signal cell by cell"
 
-    def __init__(self, LIM_coeff, LIM_corr, LIM_Power_Spectrum, Zeus_coeff, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HMF_interpolator, z, input_Resolution, Lbox=600, Nbox=200, seed=1605,one_slice=False):
-
-        if one_slice:
-            print('ONE SLICE STILL TO BE DEBUGGED!')
-            one_slice = False
+    def __init__(self, LIM_coeff, LIM_corr, LIM_Power_Spectrum, Zeus_coeff, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HMF_interpolator, z, input_Resolution, Lbox=600, Nbox=200, seed=1605):
 
         zlist = LIM_coeff.zintegral 
         _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
@@ -167,7 +159,7 @@ class CoevalBox_percell:
         #    print('Smoothing R changed to ' + str(Resolution))
 
         # get density box 
-        density_box_3d = CoevalBox_LIM_analytical(LIM_coeff, LIM_corr, LIM_Power_Spectrum, Line_Parameters, z, input_Resolution, Lbox, Nbox, seed, RSD=0,get_density_box=True,one_slice=one_slice).density_box
+        density_box_3d = CoevalBox_LIM_analytical(LIM_coeff, LIM_corr, LIM_Power_Spectrum, Line_Parameters, z, input_Resolution, Lbox, Nbox, seed, RSD=0,get_density_box=True).density_box
         density_box = density_box_3d.flatten()
 
         # compute the local dndM through EPS and HMF
@@ -210,10 +202,7 @@ class CoevalBox_percell:
 
         SFRDbox_flattend_scaled = ne.evaluate('SFRDbox_Lagrangian_flattened * (1+density_box)')
 
-        if one_slice:
-            self.SFRD_box = SFRDbox_flattend_scaled.reshape(Nbox,Nbox)
-        else:
-            self.SFRD_box = SFRDbox_flattend_scaled.reshape(Nbox,Nbox,Nbox)
+        self.SFRD_box = SFRDbox_flattend_scaled.reshape(Nbox,Nbox,Nbox)
 
         # ---- #
         # LIM box
@@ -225,10 +214,7 @@ class CoevalBox_percell:
          
         rhoLbox_flattend_scaled = ne.evaluate('rhoLbox_Lagrangian_flattened * (1+density_box)')
 
-        if one_slice:
-            self.rhoL_box = rhoLbox_flattend_scaled.reshape(Nbox,Nbox)
-        else:
-            self.rhoL_box = rhoLbox_flattend_scaled.reshape(Nbox,Nbox,Nbox)
+        self.rhoL_box = rhoLbox_flattend_scaled.reshape(Nbox,Nbox,Nbox)
 
         # get observed box 
         self.Inu_box_noiseless = self.rhoL_box * LIM_coeff.coeff1_LIM[_iz] 
@@ -269,33 +255,35 @@ class CoevalBox_percell:
         self.density_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, density_fft))
 
 
-def get_reio_field(zeus_coeff, zeus_corr, Astro_Parameters, Cosmo_Parameters, ClassyCosmo, HMF_interpolator, Lbox=600, Nbox=200, seed=1605, mass_weighted_xHII=False,include_partlion=True,one_slice=False,ENFORCE_BMF_SCALE=False):
+def get_reio_field(input_z, zeus_coeff, zeus_corr, Astro_Parameters, Cosmo_Parameters, ClassyCosmo, HMF_interpolator, Lbox=600, Nbox=200, Rmin_bubbles=0.05, seed=1605, compute_mass_weighted_xHII=False,compute_include_partlion=True,compute_partial_and_massweighted=True):
 
-    if one_slice:
-        print('ONE SLICE STILL TO BE DEBUGGED!')
-        one_slice = False
+    BMF_val = BMF(zeus_coeff, HMF_interpolator, Cosmo_Parameters, Astro_Parameters, ClassyCosmo, R_linear_sigma_fit_input=10, FLAG_converge=True, max_iter=10, ZMAX_REION = 30,Rmin=Rmin_bubbles)
 
-    BMF_val = BMF(zeus_coeff, HMF_interpolator, Cosmo_Parameters, Astro_Parameters, R_linear_sigma_fit_input=10, FLAG_converge=True, max_iter=10, ZMAX_REION = 30)
-
-    box_reio = reio(Cosmo_Parameters, ClassyCosmo, zeus_corr, zeus_coeff, BMF_val, zeus_coeff.zintegral, 
-                input_boxlength=Lbox, ncells=Nbox, seed=seed, r_precision=1., barrier=None, 
-                PRINT_TIMER=False, ENFORCE_BMF_SCALE=ENFORCE_BMF_SCALE, 
-                LOGNORMAL_DENSITY=False, COMPUTE_DENSITY_AT_ALLZ=True, SPHERIZE=False, 
-                COMPUTE_MASSWEIGHTED_IONFRAC=mass_weighted_xHII, lowres_massweighting=1,
-                INCLUDE_PARTIALION = include_partlion, COMPUTE_ZREION=False)
+    box_reio = reio(Cosmo_Parameters, ClassyCosmo, zeus_corr, zeus_coeff, BMF_val, input_z, 
+                 input_boxlength=Lbox, ncells=Nbox, seed=seed, r_precision=1., Rs=None, barrier=None, 
+                 PRINT_TIMER=False, 
+                 LOGNORMAL_DENSITY=False, COMPUTE_DENSITY_AT_ALLZ=True, SPHERIZE=False, 
+                 COMPUTE_MASSWEIGHTED=compute_mass_weighted_xHII, lowres_massweighting=1, COMPUTE_PARTIAL_IONIZATIONS=compute_include_partlion,
+                 COMPUTE_PARTIAL_AND_MASSWEIGHTED=compute_partial_and_massweighted, COMPUTE_ZREION=False
+                )
     
-    if include_partlion:
-        reionization_map = box_reio.ion_field_partial_allz
-        if mass_weighted_xHII:
-            ion_frac = box_reio.ion_frac_massweighted_subpixel
-        else:
-            ion_frac = box_reio.ion_frac_subpixel
+    if compute_include_partlion and compute_mass_weighted_xHII:
+        compute_partial_and_massweighted = True
+
+    if compute_partial_and_massweighted:
+        reionization_map = box_reio.ion_field_partial_massweighted_allz
+        ion_frac = box_reio.ion_frac_partial_massweighted
+
     else:
-        reionization_map = box_reio.ion_field_allz
-        if mass_weighted_xHII:
-            ion_frac = box_reio.ion_frac_massweighted
+        if compute_include_partlion:
+            reionization_map = box_reio.ion_field_partial_allz
+            ion_frac = box_reio.ion_frac_partial
         else:
-            ion_frac = box_reio.ion_frac
+            reionization_map = box_reio.ion_field_allz
+            if compute_mass_weighted_xHII:
+                ion_frac = box_reio.ion_frac_massweighted
+            else:
+                ion_frac = box_reio.ion_frac
 
     return reionization_map, ion_frac
 
@@ -379,19 +367,12 @@ class CoevalMaps_T21noreionization:
 class CoevalBox_T21reionization:
     "Re-build the 21cm temperature map combining the xalpha, Tk and delta for more stability in the non-linear fluctuation computation. Include the xH contribution"
 
-    def __init__(self, zeus_coeff, zeus_pk, z, reionization_map_partial, ion_frac_withpartial, Lbox=600, Nbox=200, seed=1605, MAP_T21_FULL = True, one_slice=False, input_Resolution = None):
-
-        if one_slice:
-            print('ONE SLICE STILL TO BE DEBUGGED!')
-            one_slice = False
-
-        zlist = zeus_coeff.zintegral 
-        _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
+    def __init__(self, zeus_coeff, zeus_pk, z, reionization_map_partial, ion_frac_withpartial, Lbox=600, Nbox=200, seed=1605, MAP_T21_FULL = True,  input_Resolution = None):
         
-        self.ion_frac = ion_frac_withpartial[_iz]
+        self.ion_frac = ion_frac_withpartial
         self.xH_avg_map = 1. - self.ion_frac
         
-        self.xH_box = 1. - reionization_map_partial[_iz]
+        self.xH_box = 1. - reionization_map_partial
 
         if MAP_T21_FULL:
 
@@ -414,6 +395,9 @@ class CoevalBox_T21reionization:
             T21_fft = np.fft.fftn(self.T21_map)
             self.T21_map = np.array(z21_utilities.tophat_smooth(input_Resolution, klist3Dfft, T21_fft))
 
+        if type(z) == float:
+            self.xH_box = self.xH_box[0]
+            self.T21_map = self.T21_map[0]
 
 
 def build_lightcone(which_lightcone,
@@ -429,7 +413,10 @@ def build_lightcone(which_lightcone,
             correlations,
             coefficients,
             PSLIM,
-            mass_weighted_xHII,
+            Rmin_bubbles,
+            compute_mass_weighted_xHII,
+            compute_include_partlion,
+            compute_partial_and_massweighted,
             LineParams1,
             AstroParams, 
             CosmoParams,
@@ -463,10 +450,11 @@ def build_lightcone(which_lightcone,
     lightcone = np.zeros((Ncell, Ncell, len(z_long)))
 
     box = []
-    reionization_map_partial, ion_frac_withpartial = get_reio_field(coefficients_21, correlations_21, AstroParams, CosmoParams, ClassyCosmo, HMFintclass, Lbox, Ncell, seed, mass_weighted_xHII,one_slice=False)
+    reionization_map_partial, ion_frac_withpartial = get_reio_field(
+    zvals, coefficients_21, correlations_21, AstroParams, CosmoParams, ClassyCosmo, HMFintclass, Lbox, Ncell, Rmin_bubbles, seed, compute_mass_weighted_xHII,compute_include_partlion,compute_partial_and_massweighted)
     for zi in tqdm(zvals):
 
-        box.append(lightcone_single_z(zi, zvals, Lbox,Ncell,R,seed,which_lightcone, analytical, coefficients,correlations, PSLIM, coefficients_21, PS21, reionization_map_partial, ion_frac_withpartial, HMFintclass,CosmoParams,AstroParams,LineParams1,RSD))
+        box.append(lightcone_single_z(zi, zvals, Lbox,Ncell,R,seed,which_lightcone, analytical, coefficients,correlations, PSLIM, coefficients_21, PS21, reionization_map_partial[list(zvals).index(zi)], ion_frac_withpartial[list(zvals).index(zi)], HMFintclass,CosmoParams,AstroParams,LineParams1,RSD))
         
     lightcone[:, :, 0] = box[0][:, :, 0]        
     # Loop over each z in z_long
@@ -511,7 +499,7 @@ def lightcone_single_z(zi, zvals, Lbox, Nbox, Resolution, seed, which_lightcone,
         if not analytical and zi == zvals[0]:
             print('Warning! The density map is only  analytical')
 
-        box = CoevalBox_LIM_analytical(LIM_coeff, LIM_corr, PSLIM, LineParams, zi, Resolution, Lbox, Nbox, seed, RSD, True,one_slice=False).density_box
+        box = CoevalBox_LIM_analytical(LIM_coeff, LIM_corr, PSLIM, LineParams, zi, Resolution, Lbox, Nbox, seed, RSD, True).density_box
 
     elif which_lightcone == 'xHI':
         if analytical and zi == zvals[0]:
@@ -520,18 +508,18 @@ def lightcone_single_z(zi, zvals, Lbox, Nbox, Resolution, seed, which_lightcone,
         box = CoevalBox_T21reionization(coefficients_21,PS21,zi,reionization_map_partial, ion_frac_withpartial,Lbox,Nbox,seed,MAP_T21_FULL=True).xH_box
 
     elif which_lightcone == 'SFRD':
-        box = CoevalBox_percell( LIM_coeff, LIM_corr, PSLIM, coefficients_21, LineParams, AstroParams, CosmoParams, HMFintclass, zi, Resolution, Lbox, Nbox, seed,one_slice=False).SFRD_box
+        box = CoevalBox_percell( LIM_coeff, LIM_corr, PSLIM, coefficients_21, LineParams, AstroParams, CosmoParams, HMFintclass, zi, Resolution, Lbox, Nbox, seed).SFRD_box
 
     elif which_lightcone == 'rho_L':
-        box = CoevalBox_percell( LIM_coeff, LIM_corr, PSLIM, coefficients_21, LineParams, AstroParams, CosmoParams, HMFintclass, zi, Resolution, Lbox, Nbox, seed,one_slice=False).rhoL_box
+        box = CoevalBox_percell( LIM_coeff, LIM_corr, PSLIM, coefficients_21, LineParams, AstroParams, CosmoParams, HMFintclass, zi, Resolution, Lbox, Nbox, seed).rhoL_box
 
     else:
 
         if analytical:
-            all_boxes = CoevalBox_LIM_analytical(LIM_coeff, LIM_corr, PSLIM, LineParams, zi, Resolution, Lbox, Nbox, seed, RSD,False,one_slice=False)
+            all_boxes = CoevalBox_LIM_analytical(LIM_coeff, LIM_corr, PSLIM, LineParams, zi, Resolution, Lbox, Nbox, seed, RSD,False)
 
         else:
-            all_boxes = CoevalBox_percell( LIM_coeff, LIM_corr, PSLIM, coefficients_21, LineParams, AstroParams, CosmoParams, HMFintclass, zi, Resolution, Lbox, Nbox, seed,one_slice=False)
+            all_boxes = CoevalBox_percell( LIM_coeff, LIM_corr, PSLIM, coefficients_21, LineParams, AstroParams, CosmoParams, HMFintclass, zi, Resolution, Lbox, Nbox, seed)
 
         if which_lightcone == 'LIM':
             box = all_boxes.Inu_box_noiseless
@@ -559,7 +547,10 @@ def plot_lightcone(which_lightcone,
             correlations,
             coefficients,
             PSLIM,
-            mass_weighted_xHII,
+            Rmin_bubbles,
+            compute_mass_weighted_xHII,
+            compute_include_partlion,
+            compute_partial_and_massweighted,
             LineParams,
             AstroParams, 
             CosmoParams,
@@ -591,7 +582,10 @@ def plot_lightcone(which_lightcone,
             correlations,
             coefficients,
             PSLIM,
-            mass_weighted_xHII,
+            Rmin_bubbles,
+            compute_mass_weighted_xHII,
+            compute_include_partlion,
+            compute_partial_and_massweighted,
             LineParams,
             AstroParams, 
             CosmoParams,

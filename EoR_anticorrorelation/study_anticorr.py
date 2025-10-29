@@ -72,15 +72,9 @@ path = './runs/'
 if not os.path.exists(path):
     os.makedirs(path, exist_ok=True)
 
-def NBMF(L, min_R=0.5): 
-    N = int(L/min_R/(4*np.pi/3)**(1/3))
-    return N
-
 
 def import_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox = None, _R=None,include_partlion=True):
 
-    if Nbox is None:
-        Nbox = NBMF(Lbox)
     save_path = path + model + '_' + which_par + '_' + str(Lbox) + '_' + str(Nbox) 
     if not with_shotnoise:
         save_path += '_noSN'
@@ -122,7 +116,7 @@ def import_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox = None, 
     return outputs
 
 
-def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=None,save_maps=False, _R = None,include_partlion=True, extra_label='',seed_input=None):
+def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=None,save_maps=False, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=False,compute_partial_and_massweighted=True, extra_label='',seed_input=None):
 
     if model == 'OIII':
         LP_input = a.LineParams_Input(
@@ -209,8 +203,6 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
     pk_auto_21 = [] 
     use_pk_auto_line = []
 
-    if Nbox is None:
-        Nbox = NBMF(Lbox)
     k_bins = np.logspace(np.log10(2*np.pi/Lbox),np.log10(2*np.pi/Lbox*Nbox),10) # k array 
 
     for i in tqdm(range(len(par_vals))):
@@ -231,21 +223,21 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
         pk_auto_21.append([]) 
         use_pk_auto_line.append([])
 
-        reionization_map_partial, ion_frac_withpartial = get_reio_field(zeus_coeff, zeus_corr, AP, CP, ClassyC, HMFcl, Lbox, Nbox, mass_weighted_xHII=True, seed=seed,include_partlion=include_partlion,ENFORCE_BMF_SCALE=False)
-
         if save_maps and not os.path.exists(path+  'maps_L' + str(Lbox) +'_N' + str(Nbox) +  '/'):
             os.makedirs(path +  'maps_L' + str(Lbox) +'_N' + str(Nbox) +  '/')
 
+        reionization_map_partial, ion_frac_withpartial = get_reio_field(zvals,zeus_coeff, zeus_corr, AP, CP, ClassyC, HMFcl, Lbox, Nbox, Rmin_bubbles, seed=seed, compute_mass_weighted_xHII=compute_mass_weighted_xHII,compute_include_partlion=compute_include_partlion,compute_partial_and_massweighted=compute_partial_and_massweighted)
+
         for zv in tqdm(range(len(zvals))):
 
-            box_line_all = CoevalBox_LIM_analytical(LIM_coeff,LIM_corr,LIM_pk,LP,zvals[zv],LP._R,Lbox,Nbox, RSD=RSD_MODE, get_density_box=True,seed=seed,one_slice=False,)
+            box_line_all = CoevalBox_LIM_analytical(LIM_coeff,LIM_corr,LIM_pk,LP,zvals[zv],LP._R,Lbox,Nbox, RSD=RSD_MODE, get_density_box=True,seed=seed,)
 
             if with_shotnoise:
                 box_line = box_line_all.Inu_box_smooth
             else:
                 box_line = box_line_all.Inu_box_noiseless_smooth
 
-            box_T21 = CoevalBox_T21reionization(zeus_coeff, zeus_pk, zvals[zv], reionization_map_partial, ion_frac_withpartial, Lbox, Nbox, seed, MAP_T21_FULL = True, one_slice=False,input_Resolution=_R)
+            box_T21 = CoevalBox_T21reionization(zeus_coeff, zeus_pk, zvals[zv], reionization_map_partial[zv], ion_frac_withpartial[zv], Lbox, Nbox, seed, MAP_T21_FULL = True,input_Resolution=_R)
 
             xHv[i][zv] = box_T21.xH_avg_map
             T21[i][zv] = np.mean(box_T21.T21_map)
@@ -272,7 +264,7 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
                                 row_str = " ".join(f"{val:.6e}" for val in box_delta[0][x])
                                 f_den.write(f"{zvals[zv]:.3f} {row_str}\n")
 
-                box_Pearson = (box_T21.T21_map[0]-T21[0][zv])*(box_line[0]-np.mean(box_line[0])) #/ np.sqrt(np.sum((box_T21.T21_map[0]-T21[0][zv])**2)*np.sum((box_line[0]-np.mean(box_line[0]))**2))
+                box_Pearson = (box_T21.T21_map-T21[0][zv])*(box_line-np.mean(box_line)) #/ np.sqrt(np.sum((box_T21.T21_map[0]-T21[0][zv])**2)*np.sum((box_line[0]-np.mean(box_line[0]))**2))
 
                 with open(save_path_line, "a") as f_line, open(save_path_xH, "a") as f_xH, open(save_path_T21, "a") as f_21, open(save_path_Pearson, "a") as f_P:
                     for x in range(Nbox):
@@ -285,8 +277,6 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
                             f_21.write(f"{zvals[zv]:.3f} {row_str}\n")
                             row_str = " ".join(f"{val:.6e}" for val in box_Pearson[x])
                             f_P.write(f"{zvals[zv]:.3f} {row_str}\n")
-
-
 
             if model == 'SFRDxH':
                 temp_v = r_cross(box_line,box_T21.xH_box, Lbox, k_bins, foregrounds=False)
@@ -333,7 +323,7 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
         save_path += '_noSN'
     if _R != None:
         save_path += '_' + str(_R)
-    if not include_partlion:
+    if not compute_include_partlion and not compute_partial_and_massweighted:
         save_path += '_fullion' 
     save_path += '.pkl'
     with open(save_path, 'wb') as f:

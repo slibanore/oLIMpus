@@ -1,4 +1,4 @@
-from study_anticorr import run_LIM, NBMF, get_reio_field, r_cross, Pearson, alphastar_val, betastar_val, fesc_val, epsstar_val, LX_val
+from study_anticorr import run_LIM, get_reio_field, r_cross, Pearson, alphastar_val, betastar_val, fesc_val, epsstar_val, LX_val
 from oLIMpus import CoevalBox_LIM_analytical, CoevalBox_T21reionization 
 from oLIMpus import analysis as a 
 import numpy as np 
@@ -60,18 +60,16 @@ path = './run_random_parameters/'
 if not os.path.exists(path):
     os.makedirs(path, exist_ok=True)
 
-def run_many(Nruns,model,Lbox,with_shotnoise=True,Nbox=None, _R = None,include_partlion=True, extra_label='',seed_input=None):
+def run_many(Nruns,model,Lbox,with_shotnoise=True,Nbox=None, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=False,compute_partial_and_massweighted=True, extra_label='',seed_input=None):
 
     for n in range(Nruns):
 
-        generate_maps_random(n, model,Lbox,with_shotnoise,Nbox,_R,include_partlion, extra_label,seed_input)
+        generate_maps_random(n, model,Lbox,Nbox,with_shotnoise,_R,Rmin_bubbles,
+                             _R,Rmin_bubbles,compute_mass_weighted_xHII,compute_include_partlion,compute_partial_and_massweighted, extra_label,seed_input)
 
     return 
 
 def import_random_model(nid, model,Lbox,with_shotnoise=True,Nbox = None, _R=None,include_partlion=True):
-
-    if Nbox is None:
-        Nbox = NBMF(Lbox)
 
     save_path = path + str(nid) + '_random_' + model + '_' + str(Lbox) + '_' + str(Nbox) 
 
@@ -114,7 +112,7 @@ def import_random_model(nid, model,Lbox,with_shotnoise=True,Nbox = None, _R=None
     return outputs
 
 
-def generate_maps_random(nid, model,Lbox,with_shotnoise=True,Nbox=None, _R = None,include_partlion=True, extra_label='',seed_input=None):
+def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=False,compute_partial_and_massweighted=True, extra_label='',seed_input=None):
 
     if model == 'OIII':
         LP_input = a.LineParams_Input(
@@ -194,13 +192,9 @@ def generate_maps_random(nid, model,Lbox,with_shotnoise=True,Nbox=None, _R = Non
     pk_auto_21 = [] 
     use_pk_auto_line = []
 
-    if Nbox is None:
-        Nbox = NBMF(Lbox)
     k_bins = np.logspace(np.log10(2*np.pi/Lbox),np.log10(2*np.pi/Lbox*Nbox),10) # k array 
 
     seed = np.random.randint(0, 2**32) if seed_input == None else seed_input
-
-    reionization_map_partial, ion_frac_withpartial = get_reio_field(zeus_coeff, zeus_corr, AP, CP, ClassyC, HMFcl, Lbox, Nbox, mass_weighted_xHII=True, seed=seed,include_partlion=include_partlion,ENFORCE_BMF_SCALE=False)
 
     save_path = path +  'random_maps_L' + str(Lbox) +'_N' + str(Nbox) +  '/'
     if not os.path.exists(save_path):
@@ -223,14 +217,16 @@ def generate_maps_random(nid, model,Lbox,with_shotnoise=True,Nbox=None, _R = Non
 
     for zv in tqdm(range(len(zvals))):
 
-        box_line_all = CoevalBox_LIM_analytical(LIM_coeff,LIM_corr,LIM_pk,LP,zvals[zv],LP._R,Lbox,Nbox, RSD=RSD_MODE, get_density_box=True,seed=seed,one_slice=False,)
+        box_line_all = CoevalBox_LIM_analytical(LIM_coeff,LIM_corr,LIM_pk,LP,zvals[zv],LP._R,Lbox,Nbox, RSD=RSD_MODE, get_density_box=True,seed=seed)
 
         if with_shotnoise:
             box_line = box_line_all.Inu_box_smooth
         else:
             box_line = box_line_all.Inu_box_noiseless_smooth
 
-        box_T21 = CoevalBox_T21reionization(zeus_coeff, zeus_pk, zvals[zv], reionization_map_partial, ion_frac_withpartial, Lbox, Nbox, seed, MAP_T21_FULL = True, one_slice=False,input_Resolution=_R)
+        reionization_map_partial, ion_frac_withpartial = get_reio_field(zvals[zv],zeus_coeff, zeus_corr, AP, CP, ClassyC, HMFcl, Lbox, Nbox, Rmin_bubbles, seed=seed, compute_mass_weighted_xHII=False,compute_mass_weighted_xHII=compute_mass_weighted_xHII,compute_include_partlion=compute_include_partlion,compute_partial_and_massweighted=compute_partial_and_massweighted)
+
+        box_T21 = CoevalBox_T21reionization(zeus_coeff, zeus_pk, zvals[zv], reionization_map_partial, ion_frac_withpartial, Lbox, Nbox, seed, MAP_T21_FULL = True, input_Resolution=_R)
 
         xHv[zv] = box_T21.xH_avg_map
         T21[zv] = np.mean(box_T21.T21_map)

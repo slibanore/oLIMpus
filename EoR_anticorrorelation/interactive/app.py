@@ -10,6 +10,7 @@ import numpy as np
 import pickle 
 from scipy.interpolate import interp1d
 import os
+import matplotlib.pyplot as plt
 
 # astro parameters fiducial
 AstroParams_input_fid_use = dict(
@@ -141,14 +142,19 @@ for nid in range(N):
     T21max_index = list(T21).index(np.max(T21))
     zT21max = use_zvals[T21max_index]
 
+    der_P = np.gradient(p,use_zvals)
+    # plt.plot(use_zvals,der_P,'--')
+    # plt.plot(use_zvals,p,'--')
+    # plt.axhline(0)
+    # plt.show()
+
     # Define saturation as max value
     sat_level = np.asarray(p[::-1]).max()
 
     drop_idx = 0 
-    tol = 0.04 * sat_level  # 2% tolerance, adjust as needed
+    tol = 0.04 * sat_level  
 
     for i in range(len(p) - 1):
-        # current value NOT close to sat_level
         if abs(p[i] - sat_level) > tol and abs(p[i+1] - sat_level) <= tol:
             drop_idx = i
     
@@ -297,6 +303,7 @@ def create_figure(highlight_index=None):
         )
     )
 
+    fig.write_html("explore_parameters.html")
     return fig
 
 # -------------------
