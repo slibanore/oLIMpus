@@ -60,12 +60,11 @@ path = './run_random_parameters/'
 if not os.path.exists(path):
     os.makedirs(path, exist_ok=True)
 
-def run_many(Nruns,model,Lbox,with_shotnoise=True,Nbox=None, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=False,compute_partial_and_massweighted=True, extra_label='',seed_input=None):
+def run_many(Nruns,model,Lbox,with_shotnoise=True,Nbox=None, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=True,compute_partial_and_massweighted=False, extra_label='',seed_input=None):
 
     for n in range(Nruns):
 
-        generate_maps_random(n, model,Lbox,Nbox,with_shotnoise,_R,Rmin_bubbles,
-                             _R,Rmin_bubbles,compute_mass_weighted_xHII,compute_include_partlion,compute_partial_and_massweighted, extra_label,seed_input)
+        generate_maps_random(n, model,Lbox,Nbox,with_shotnoise,_R,Rmin_bubbles,compute_mass_weighted_xHII,compute_include_partlion,compute_partial_and_massweighted, extra_label,seed_input)
 
     return 
 
@@ -112,7 +111,7 @@ def import_random_model(nid, model,Lbox,with_shotnoise=True,Nbox = None, _R=None
     return outputs
 
 
-def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=False,compute_partial_and_massweighted=True, extra_label='',seed_input=None):
+def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=False,compute_partial_and_massweighted=True, extra_label='',seed_input=None,save_maps =False):
 
     if model == 'OIII':
         LP_input = a.LineParams_Input(
@@ -214,6 +213,8 @@ def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rm
         f.write(f"{fesc:.3f}\t")
         f.write(f"{LX:.3f}\n")
  
+    reionization_map_partial, ion_frac_withpartial = get_reio_field(zvals,zeus_coeff, zeus_corr, AP, CP, ClassyC, HMFcl, Lbox, Nbox, Rmin_bubbles, seed=seed, compute_mass_weighted_xHII=compute_mass_weighted_xHII,compute_include_partlion=compute_include_partlion,compute_partial_and_massweighted=compute_partial_and_massweighted)
+
 
     for zv in tqdm(range(len(zvals))):
 
@@ -224,9 +225,8 @@ def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rm
         else:
             box_line = box_line_all.Inu_box_noiseless_smooth
 
-        reionization_map_partial, ion_frac_withpartial = get_reio_field(zvals[zv],zeus_coeff, zeus_corr, AP, CP, ClassyC, HMFcl, Lbox, Nbox, Rmin_bubbles, seed=seed, compute_mass_weighted_xHII=False,compute_mass_weighted_xHII=compute_mass_weighted_xHII,compute_include_partlion=compute_include_partlion,compute_partial_and_massweighted=compute_partial_and_massweighted)
 
-        box_T21 = CoevalBox_T21reionization(zeus_coeff, zeus_pk, zvals[zv], reionization_map_partial, ion_frac_withpartial, Lbox, Nbox, seed, MAP_T21_FULL = True, input_Resolution=_R)
+        box_T21 = CoevalBox_T21reionization(zeus_coeff, zeus_pk, zvals[zv], reionization_map_partial[zv], ion_frac_withpartial[zv], Lbox, Nbox, seed, MAP_T21_FULL = True, input_Resolution=_R)
 
         xHv[zv] = box_T21.xH_avg_map
         T21[zv] = np.mean(box_T21.T21_map)
@@ -236,15 +236,17 @@ def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rm
         save_path_T21 = save_path +  str(nid) + '_random_T21' + SNlabel + extra_label + '.dat'
         save_path_xH = save_path + str(nid) + '_random_' + 'xH'+ SNlabel +extra_label + '.dat'
 
-        with open(save_path_line, "a") as f_line, open(save_path_xH, "a") as f_xH, open(save_path_T21, "a") as f_21:
-            for x in range(Nbox):
-                box_T21.T21_map[0][x][np.isnan(box_T21.T21_map[0][x])] = 0.
-                row_str = " ".join(f"{val:.6e}" for val in box_line[0][x])
-                f_line.write(f"{zvals[zv]:.3f} {row_str}\n")
-                row_str = " ".join(f"{val:.6e}" for val in box_T21.xH_box[0][x])
-                f_xH.write(f"{zvals[zv]:.3f} {row_str}\n")
-                row_str = " ".join(f"{val:.6e}" for val in box_T21.T21_map[0][x])
-                f_21.write(f"{zvals[zv]:.3f} {row_str}\n")
+        if save_maps:
+
+            with open(save_path_line, "a") as f_line, open(save_path_xH, "a") as f_xH, open(save_path_T21, "a") as f_21:
+                for x in range(Nbox):
+                    box_T21.T21_map[0][x][np.isnan(box_T21.T21_map[0][x])] = 0.
+                    row_str = " ".join(f"{val:.6e}" for val in box_line[0][x])
+                    f_line.write(f"{zvals[zv]:.3f} {row_str}\n")
+                    row_str = " ".join(f"{val:.6e}" for val in box_T21.xH_box[0][x])
+                    f_xH.write(f"{zvals[zv]:.3f} {row_str}\n")
+                    row_str = " ".join(f"{val:.6e}" for val in box_T21.T21_map[0][x])
+                    f_21.write(f"{zvals[zv]:.3f} {row_str}\n")
 
         temp_v = r_cross(box_line,box_T21.T21_map, Lbox, k_bins, foregrounds=False)
         p[zv] = Pearson(box_line,box_T21.T21_map,False)
@@ -277,8 +279,7 @@ def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rm
         save_path += '_noSN'
     if _R != None:
         save_path += '_' + str(_R)
-    if not include_partlion:
-        save_path += '_fullion' 
+    save_path += extra_label
     save_path += '.pkl'
     with open(save_path, 'wb') as f:
         pickle.dump(data_to_save, f)

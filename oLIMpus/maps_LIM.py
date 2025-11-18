@@ -91,16 +91,28 @@ class CoevalBox_LIM_analytical:
             Pnu = LIM_Power_Spectrum._Pk_LIM_RSD[_iz,:]
 
         Pnu_interp = interp1d(klist,Pnu,fill_value=0.0,bounds_error=False)
+        if Line_Parameters.LINE_MODEL == 'powerlaw':
 
-        pb = pbox.PowerBox(
-            N=self.Nbox,                     
-            dim= 3,                     
-            pk = lambda k: Pnu_interp(k), 
-            boxlength = self.Lbox,           
-            seed = self.seed,
-        )
+            pb = pbox.LogNormalPowerBox(
+                N=self.Nbox,                     
+                dim= 3,                     
+                pk = lambda k: Pnu_interp(k)*1e10, 
+                boxlength = self.Lbox,           
+                seed = self.seed,
+            )
+            self.Inu_box_noiseless = pb.delta_x()/1e5 + self.Inu_bar
 
-        self.Inu_box_noiseless = pb.delta_x() + self.Inu_bar
+        else:
+            # produce Gaussian box with boosted power spectrum
+            pb = pbox.LogNormalPowerBox(
+                N=self.Nbox,                     
+                dim= 3,                     
+                pk = lambda k: Pnu_interp(k), 
+                boxlength = self.Lbox,           
+                seed = self.seed,
+            )
+            self.Inu_box_noiseless = pb.delta_x() + self.Inu_bar
+
 
         # create shot noise box
         if Line_Parameters.shot_noise:
@@ -115,7 +127,7 @@ class CoevalBox_LIM_analytical:
                 seed = self.seed+2, # uncorrelated from the density field
             )
 
-            self.shotnoise_box = pb_shot.delta_x() # shot noise box
+            self.shotnoise_box = pb_shot.delta_x() + LIM_coeff.shot_noise[_iz] # shot noise box
         else:
             self.shotnoise_box = np.zeros_like(self.Inu_box_noiseless)
 
@@ -267,8 +279,8 @@ def get_reio_field(input_z, zeus_coeff, zeus_corr, Astro_Parameters, Cosmo_Param
                  COMPUTE_PARTIAL_AND_MASSWEIGHTED=compute_partial_and_massweighted, COMPUTE_ZREION=False
                 )
     
-    if compute_include_partlion and compute_mass_weighted_xHII:
-        compute_partial_and_massweighted = True
+    # if compute_include_partlion and compute_mass_weighted_xHII:
+    #     compute_partial_and_massweighted = True
 
     if compute_partial_and_massweighted:
         reionization_map = box_reio.ion_field_partial_massweighted_allz
@@ -390,14 +402,18 @@ class CoevalBox_T21reionization:
         self.T21_map = self.T21_map_only * self.xH_box
 
         if input_Resolution != None:
-            klistfftx = np.fft.fftfreq(self.T21_map.shape[0],Lbox/Nbox)*2*np.pi
-            klist3Dfft = np.sqrt(np.sum(np.meshgrid(klistfftx**2, klistfftx**2, klistfftx**2, indexing='ij'), axis=0))
-            T21_fft = np.fft.fftn(self.T21_map)
-            self.T21_map = np.array(z21_utilities.tophat_smooth(input_Resolution, klist3Dfft, T21_fft))
+            Resolution = max(input_Resolution, Lbox/Nbox)
+        else:
+            Resolution = Lbox/Nbox
 
-        if type(z) == float:
-            self.xH_box = self.xH_box[0]
-            self.T21_map = self.T21_map[0]
+        klistfftx = np.fft.fftfreq(self.T21_map.shape[0],Lbox/Nbox)*2*np.pi
+        klist3Dfft = np.sqrt(np.sum(np.meshgrid(klistfftx**2, klistfftx**2, klistfftx**2, indexing='ij'), axis=0))
+        T21_fft = np.fft.fftn(self.T21_map)
+        self.T21_map = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, T21_fft))
+        T21_map_only_fft = np.fft.fftn(self.T21_map_only)
+        self.T21_map_only = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, T21_map_only_fft))
+        xH_box_fft = np.fft.fftn(self.xH_box)
+        self.xH_box = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, xH_box_fft))
 
 
 def build_lightcone(which_lightcone,
