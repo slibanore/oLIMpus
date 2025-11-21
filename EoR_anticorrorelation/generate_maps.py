@@ -20,7 +20,7 @@ UP = a.User_Parameters(
             )
 
 # cosmological parameters
-CP, ClassyC, zeus_corr, HMFcl = a.cosmo_wrapper(UP, a.Cosmo_Parameters_Input(**a.CosmoParams_input_fid))
+CP_fid, ClassyC_fid, zeus_corr_fid, HMFcl_fid = a.cosmo_wrapper(UP, a.Cosmo_Parameters_Input(**a.CosmoParams_input_fid))
 
 # astro parameters fiducial
 AstroParams_input_fid_use = dict(
@@ -60,15 +60,15 @@ path = './run_random_parameters/'
 if not os.path.exists(path):
     os.makedirs(path, exist_ok=True)
 
-def run_many(Nruns,model,Lbox,with_shotnoise=True,Nbox=None, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=True,compute_partial_and_massweighted=False, extra_label='',seed_input=None):
+def run_many(Nruns,model,Lbox,with_shotnoise=True,Nbox=None, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=True,compute_partial_and_massweighted=False, extra_label='',seed_input=None,vary_cosmology=False):
 
     for n in range(Nruns):
 
-        generate_maps_random(n, model,Lbox,Nbox,with_shotnoise,_R,Rmin_bubbles,compute_mass_weighted_xHII,compute_include_partlion,compute_partial_and_massweighted, extra_label,seed_input)
+        generate_maps_random(n, model,Lbox,Nbox,with_shotnoise,_R,Rmin_bubbles,compute_mass_weighted_xHII,compute_include_partlion,compute_partial_and_massweighted, extra_label,seed_input,vary_cosmology=vary_cosmology)
 
     return 
 
-def import_random_model(nid, model,Lbox,with_shotnoise=True,Nbox = None, _R=None,include_partlion=True):
+def import_random_model(nid, model,Lbox,with_shotnoise=True,Nbox = None, _R=None,include_partlion=True,vary_cosmology=False):
 
     save_path = path + str(nid) + '_random_' + model + '_' + str(Lbox) + '_' + str(Nbox) 
 
@@ -76,6 +76,8 @@ def import_random_model(nid, model,Lbox,with_shotnoise=True,Nbox = None, _R=None
         save_path += '_noSN'
     if _R != None:
         save_path += '_' + str(_R)
+    if vary_cosmology:
+        save_path += '_cosmovar_'
     if not include_partlion:
         save_path += '_fullion' 
 
@@ -111,7 +113,7 @@ def import_random_model(nid, model,Lbox,with_shotnoise=True,Nbox = None, _R=None
     return outputs
 
 
-def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=False,compute_partial_and_massweighted=True, extra_label='',seed_input=None,save_maps =False):
+def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=False,compute_partial_and_massweighted=True, extra_label='',seed_input=None,save_maps =False, vary_cosmology = False):
 
     if model == 'OIII':
         LP_input = a.LineParams_Input(
@@ -177,8 +179,15 @@ def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rm
 
 
     alphastar, betastar, epsstar, fesc, LX = extract_parameters()
+    if vary_cosmology:
+        CP, ClassyC, HMFcl, zeus_corr = extract_cosmo_parameters()
+    else:
+        CP=CP_fid
+        ClassyC=ClassyC_fid
+        HMFcl=HMFcl_fid 
+        zeus_corr=zeus_corr_fid
 
-    AP, LIM_coeff, LIM_corr, LIM_pk, zeus_coeff, zeus_corr, zeus_pk = run_LIM(alphastar=alphastar,betastar=betastar,epsstar=epsstar,Mturn_fixed=None,Mc=None,fesc=fesc,LX=LX,LP=LP)
+    AP, LIM_coeff, LIM_corr, LIM_pk, zeus_coeff, zeus_corr, zeus_pk = run_LIM(alphastar=alphastar,betastar=betastar,epsstar=epsstar,Mturn_fixed=None,Mc=None,fesc=fesc,LX=LX,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
 
     zvals = zeus_coeff.zintegral 
 
@@ -279,6 +288,10 @@ def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rm
         save_path += '_noSN'
     if _R != None:
         save_path += '_' + str(_R)
+    if vary_cosmology:
+        save_path += '_cosmovar_'
+    if not compute_include_partlion:
+        save_path += '_fullion' 
     save_path += extra_label
     save_path += '.pkl'
     with open(save_path, 'wb') as f:
@@ -307,3 +320,30 @@ def extract_parameters():
     LX = np.random.normal(LX_fid, sigma_LX)
 
     return alphastar, betastar, epsstar, fesc, LX 
+
+
+def extract_cosmo_parameters():
+
+    # sigma from Tab 1 in 1807.06209
+    omegab = np.random.normal(a.CosmoParams_input_fid['omegab'],0.00015)
+    omegac = np.random.normal(a.CosmoParams_input_fid['omegac'],0.0012)
+    h_fid = np.random.normal(a.CosmoParams_input_fid['h_fid'],0.54/100.)
+    As = np.random.normal(a.CosmoParams_input_fid['As'],np.exp(0.014)/1e10)
+    ns = np.random.normal(a.CosmoParams_input_fid['ns'],0.0042)
+    tau_fid = np.random.normal(a.CosmoParams_input_fid['tau_fid'],0.0074)
+
+    CosmoParams_input = dict(
+        omegab= omegab, 
+        omegac = omegac, 
+        h_fid = h_fid, 
+        As = As, 
+        ns = ns, 
+        tau_fid = tau_fid, 
+        HMF_CHOICE= "ST",
+        Flag_emulate_21cmfast = False,
+        )
+    
+    CP, ClassyC, zeus_corr, HMFcl = a.cosmo_wrapper(UP, a.Cosmo_Parameters_Input(**CosmoParams_input))
+
+
+    return CP, ClassyC, HMFcl, zeus_corr

@@ -25,7 +25,7 @@ UP = a.User_Parameters(
             )
 
 # cosmological parameters
-CP, ClassyC, zeus_corr, HMFcl = a.cosmo_wrapper(UP, a.Cosmo_Parameters_Input(**a.CosmoParams_input_fid))
+CP_fid, ClassyC_fid, zeus_corr_fid, HMFcl_fid = a.cosmo_wrapper(UP, a.Cosmo_Parameters_Input(**a.CosmoParams_input_fid))
 
 # astro parameters fiducial
 AstroParams_input_fid_use = dict(
@@ -116,7 +116,7 @@ def import_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox = None, 
     return outputs
 
 
-def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=None,save_maps=False, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=False,compute_partial_and_massweighted=True, extra_label='',seed_input=None, reionization_by_z = False):
+def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=None,save_maps=False, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=False,compute_partial_and_massweighted=True, extra_label='',seed_input=None, reionization_by_z = False,CP=CP_fid, ClassyC=ClassyC_fid, HMFcl=HMFcl_fid, zeus_corr=zeus_corr_fid):
 
     if model == 'OIII':
         LP_input = a.LineParams_Input(
@@ -181,18 +181,18 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
     LP = a.Line_Parameters(LP_input,UP)
 
     if which_par == 'fstar':
-        mm = lambda epsstar: run_LIM(alphastar=None,betastar=None,epsstar=epsstar,Mturn_fixed=None,Mc=None,fesc=None,LX=None,LP=LP)
+        mm = lambda epsstar: run_LIM(alphastar=None,betastar=None,epsstar=epsstar,Mturn_fixed=None,Mc=None,fesc=None,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
     elif which_par == 'fesc':
-        mm = lambda fesc: run_LIM(alphastar=None,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=fesc,LX=None,LP=LP)
+        mm = lambda fesc: run_LIM(alphastar=None,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=fesc,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
     elif which_par == 'alphastar':
-        mm = lambda alpha: run_LIM(alphastar=alpha,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,LX=None,LP=LP)
+        mm = lambda alpha: run_LIM(alphastar=alpha,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
     elif which_par == 'betastar':
-        mm = lambda beta: run_LIM(alphastar=None,betastar=beta,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,LX=None,LP=LP)
+        mm = lambda beta: run_LIM(alphastar=None,betastar=beta,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
     elif which_par == 'LX':
-        mm = lambda LX: run_LIM(alphastar=None,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,LX=LX,LP=LP)
+        mm = lambda LX: run_LIM(alphastar=None,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,LX=LX,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
     elif which_par == 'fiducial':
         par_vals = [0]
-        mm = lambda x: run_LIM(alphastar=None,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,LX=None,LP=LP)
+        mm = lambda x: run_LIM(alphastar=None,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
 
     p = []
     T21 = []
@@ -342,9 +342,9 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
     return
 
 
-def run_LIM(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,LX,LP):
+def run_LIM(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,LX,LP,CP=CP_fid, ClassyC=ClassyC_fid, HMFcl=HMFcl_fid, zeus_corr=zeus_corr_fid):
 
-    AP = change_astro(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,LX)
+    AP = change_astro(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,LX,CP)
 
     # LIM
     LIM_coeff = a.get_LIM_coefficients(LP, AP, CP, HMFcl, UP, ZMIN)
@@ -363,7 +363,7 @@ def run_LIM(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,LX,LP):
     return AP, LIM_coeff, LIM_corr, LIM_pk, zeus_coeff, zeus_corr, zeus_pk
 
 
-def change_astro(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,LX):
+def change_astro(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,LX,CP=CP_fid):
 
     AstroParams_input = copy(AstroParams_input_fid_use)
     if alphastar is not None:
