@@ -46,13 +46,14 @@ class CoevalMaps:
         if (KIND == 0): #just T21, ~gaussian
                 
             P21 = Power_Spectrum.Deltasq_T21_lin[_iz]/k3over2pi2
-            P21norminterp = interp1d(klist,P21/self.T21global_noR**2,fill_value=0.0,bounds_error=False)
+            # P21norminterp = interp1d(klist,P21/self.T21global_noR**2,fill_value=0.0,bounds_error=False)
+            P21_spl = spline(np.log(klist), np.log(P21/self.T21global**2)) #spline over log values
 
 
             pb = pbox.PowerBox(
                 N=self.Nbox,                     
                 dim=3,                     
-                pk = lambda k: P21norminterp(k), 
+                pk = lambda k: np.exp(P21_spl(np.log(k))), 
                 boxlength = self.Lbox,           
                 seed = self.seed                
             )
@@ -64,12 +65,14 @@ class CoevalMaps:
             
         elif (KIND == 1):
             Pd = Power_Spectrum.Deltasq_d_lin[_iz,:]/k3over2pi2
-            Pdinterp = interp1d(klist,Pd,fill_value=0.0,bounds_error=False)
+            #Pdinterp = interp1d(klist,Pd,fill_value=0.0,bounds_error=False)
+            Pd_spl = spline(np.log(klist), np.log(Pd))
 
             pb = pbox.PowerBox(
                 N=self.Nbox,                     
                 dim=3,                     
-                pk = lambda k: Pdinterp(k), 
+                #pk = lambda k: Pdinterp(k), 
+                pk = lambda k: np.exp(Pd_spl(np.log(k))), 
                 boxlength = self.Lbox,           
                 seed = self.seed               
             )
@@ -79,12 +82,13 @@ class CoevalMaps:
             #then we make a map of the linear T21 fluctuation, better to use the cross to keep sign, at linear level same 
             PdT21 = Power_Spectrum.Deltasq_dT21[_iz]/k3over2pi2
 
-            powerratioint = interp1d(klist,PdT21/Pd,fill_value=0.0,bounds_error=False)
+            # powerratioint = interp1d(klist,PdT21/Pd,fill_value=0.0,bounds_error=False)
+            powerratio_spl = spline(klist, PdT21/Pd) #cross can be negative, so can't interpolate over log values
 
 
             deltak = pb.delta_k()
 
-            powerratio = powerratioint(pb.k())
+            powerratio = powerratio_spl(pb.k())
             T21lin_k = powerratio * deltak
             self.T21maplin= self.T21global + z21_utilities.powerboxCtoR(pb,mapkin = T21lin_k)
 
@@ -407,9 +411,10 @@ class reionization_maps:
 
         iterator = trange(len(self.z)) if self.PRINT_TIMER else range(len(self.z))
         for i in iterator:
-            nion_spl = spline(sample_d, BMF.nion_delta_r_int(CosmoParams, sample_d, self.z, r)[:, i])
-            nrec_spl = spline(sample_d, BMF.nrec(CosmoParams, sample_d, BMF.ion_frac, self.z)[:, i])
-            partial_ion_spl = spline(sample_d, nion_spl(sample_d)/(1+nrec_spl(sample_d)))
+            # nion_spl = spline(sample_d, BMF.nion_delta_r_int(CosmoParams, sample_d, self.z, r)[:, i])
+            # nrec_spl = spline(sample_d, BMF.nrec(CosmoParams, sample_d, BMF.ion_frac, self.z)[:, i])
+            # partial_ion_spl = spline(sample_d, nion_spl(sample_d)/(1+nrec_spl(sample_d)))
+            partial_ion_spl = spline(sample_d, BMF.prebarrier_xHII_int_grid(sample_d, self.z[i], r)) #spline is faster than RGI, so build a spline on sample densities
 
             #if need to do by slices:
             #np.array([partial_ion_noclip(maps.density_allz[:, i], maps.ion_field_allz[:, i], ir=0) for i in trange(300)]).transpose(1, 0, 2, 3)

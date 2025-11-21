@@ -331,12 +331,14 @@ class CoevalMaps_T21noreionization:
         Dsq_T21 = Power_Spectrum.Deltasq_T21[_iz]
 
         Pd = Power_Spectrum.Deltasq_d_lin[_iz,:]/k3over2pi2
-        Pdinterp = interp1d(klist,Pd,fill_value=0.0,bounds_error=False)
+        #Pdinterp = interp1d(klist,Pd,fill_value=0.0,bounds_error=False)
+        Pd_spl = spline(np.log(klist), np.log(Pd))
 
         pb = pbox.PowerBox(
             N=self.Nbox,                     
             dim=3,                     
-            pk = lambda k: Pdinterp(k), 
+            #pk = lambda k: Pdinterp(k), 
+            pk = lambda k: np.exp(Pd_spl(np.log(k))), 
             boxlength = self.Lbox,           
             seed = self.seed               
         )
@@ -346,12 +348,13 @@ class CoevalMaps_T21noreionization:
         #then we make a map of the linear T21 fluctuation, better to use the cross to keep sign, at linear level same 
         PdT21 = Dsq_dT21/k3over2pi2
 
-        powerratioint = interp1d(klist,PdT21/Pd,fill_value=0.0,bounds_error=False)
+        #powerratioint = interp1d(klist,PdT21/Pd,fill_value=0.0,bounds_error=False)
+        powerratio_spl = spline(klist, PdT21/Pd) #cross can be negative, so can't interpolate over log values
 
 
         deltak = pb.delta_k()
 
-        powerratio = powerratioint(pb.k())
+        powerratio = powerratio_spl(pb.k())
         T21lin_k = powerratio * deltak
         self.T21maplin= self.T21global_noR + z21_utilities.powerboxCtoR(pb,mapkin = T21lin_k)
 

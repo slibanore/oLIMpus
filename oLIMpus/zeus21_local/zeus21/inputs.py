@@ -130,6 +130,12 @@ class Cosmo_Parameters:
         
         ###HAC: added v_cb flag
         self.USE_RELATIVE_VELOCITIES = CosmoParams_input.USE_RELATIVE_VELOCITIES
+        if self.USE_RELATIVE_VELOCITIES == True:
+            self.sigma_vcb = ClassCosmo.pars['sigma_vcb']
+            self.vcb_avg = ClassCosmo.pars['v_avg']
+        else:  #set but not to random values, just something sensible in case the user wants pop3 but not relvel
+            self.sigma_vcb = 30.0
+            self.vcb_avg = 27.5
         
         ###n_H() stuff
         self.Y_He = ClassCosmo.get_current_derived_parameters(['YHe'])['YHe']
@@ -392,6 +398,7 @@ class Astro_Parameters:
         #dust parameters for UVLFs:
         self.C0dust, self.C1dust = C0dust, C1dust #4.43, 1.99 is Meurer99; 4.54, 2.07 is Overzier01
         self._kappaUV = 1.15e-28 #SFR/LUV, value from Madau+Dickinson14, fully degenerate with epsilon
+        self._kappaUV_III = self._kappaUV #SFR/LUV for PopIII. Assume X more efficient than PopII
 
 
 
