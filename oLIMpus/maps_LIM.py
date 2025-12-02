@@ -324,11 +324,11 @@ class CoevalMaps_T21noreionization:
         klist = Power_Spectrum.klist_PS
         k3over2pi2 = klist**3/(2*np.pi**2)
 
-        Dsq_T21_lin = Power_Spectrum.Deltasq_T21_lin[_iz] 
+        Dsq_T21_lin = Power_Spectrum.Deltasq_T21_lin_noR[_iz] 
 
         Dsq_dT21 = Power_Spectrum.Deltasq_dT21[_iz]
 
-        Dsq_T21 = Power_Spectrum.Deltasq_T21[_iz]
+        Dsq_T21 = Power_Spectrum.Deltasq_T21_noR[_iz]
 
         Pd = Power_Spectrum.Deltasq_d_lin[_iz,:]/k3over2pi2
         #Pdinterp = interp1d(klist,Pd,fill_value=0.0,bounds_error=False)
@@ -382,12 +382,18 @@ class CoevalMaps_T21noreionization:
 class CoevalBox_T21reionization:
     "Re-build the 21cm temperature map combining the xalpha, Tk and delta for more stability in the non-linear fluctuation computation. Include the xH contribution"
 
-    def __init__(self, zeus_coeff, zeus_pk, z, reionization_map_partial, ion_frac_withpartial, Lbox=600, Nbox=200, seed=1605, MAP_T21_FULL = True,  input_Resolution = None):
+    def __init__(self, zeus_coeff, zeus_pk, z, reionization_map_partial, ion_frac_withpartial, Lbox=600, Nbox=200, seed=1605, MAP_T21_FULL = True,  input_Resolution = None, smooth_box = True):
         
+        if len(reionization_map_partial) == 1:
+            reionization_map_partial = reionization_map_partial[0]
+            ion_frac_withpartial = ion_frac_withpartial[0]
+
         self.ion_frac = ion_frac_withpartial
         self.xH_avg_map = 1. - self.ion_frac
         
+        self.xHI_box = reionization_map_partial
         self.xH_box = 1. - reionization_map_partial
+        self.xH_box[np.isnan(self.xH_box)] = 0.
 
         if MAP_T21_FULL:
 
@@ -404,19 +410,23 @@ class CoevalBox_T21reionization:
 
         self.T21_map = self.T21_map_only * self.xH_box
 
-        if input_Resolution != None:
-            Resolution = max(input_Resolution, Lbox/Nbox)
-        else:
-            Resolution = Lbox/Nbox
+        if smooth_box:
+            if input_Resolution != None:
+                Resolution = max(input_Resolution, Lbox/Nbox)
+            else:
+                Resolution = Lbox/Nbox
 
-        klistfftx = np.fft.fftfreq(self.T21_map.shape[0],Lbox/Nbox)*2*np.pi
-        klist3Dfft = np.sqrt(np.sum(np.meshgrid(klistfftx**2, klistfftx**2, klistfftx**2, indexing='ij'), axis=0))
-        T21_fft = np.fft.fftn(self.T21_map)
-        self.T21_map = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, T21_fft))
-        T21_map_only_fft = np.fft.fftn(self.T21_map_only)
-        self.T21_map_only = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, T21_map_only_fft))
-        xH_box_fft = np.fft.fftn(self.xH_box)
-        self.xH_box = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, xH_box_fft))
+            klistfftx = np.fft.fftfreq(self.T21_map.shape[0],Lbox/Nbox)*2*np.pi
+            klist3Dfft = np.sqrt(np.sum(np.meshgrid(klistfftx**2, klistfftx**2, klistfftx**2, indexing='ij'), axis=0))
+
+            T21_fft = np.fft.fftn(self.T21_map)
+            self.T21_map = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, T21_fft))
+
+            T21_map_only_fft = np.fft.fftn(self.T21_map_only)
+            self.T21_map_only = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, T21_map_only_fft))
+
+            xH_box_fft = np.fft.fftn(self.xH_box)
+            self.xH_box = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, xH_box_fft))
 
 
 def build_lightcone(which_lightcone,

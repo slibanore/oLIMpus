@@ -32,7 +32,6 @@ class CoevalMaps:
 
         zlist = T21_coefficients.zintegral 
         _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
-        self.T21global_noR = T21_coefficients.T21avg_noR[_iz]
         self.T21global = T21_coefficients.T21avg[_iz]
         self.Nbox = Nbox
         self.Lbox = Lbox
@@ -46,7 +45,7 @@ class CoevalMaps:
         if (KIND == 0): #just T21, ~gaussian
                 
             P21 = Power_Spectrum.Deltasq_T21_lin[_iz]/k3over2pi2
-            # P21norminterp = interp1d(klist,P21/self.T21global_noR**2,fill_value=0.0,bounds_error=False)
+            #P21norminterp = interp1d(klist,P21/self.T21global**2,fill_value=0.0,bounds_error=False) OLD
             P21_spl = spline(np.log(klist), np.log(P21/self.T21global**2)) #spline over log values
 
 
@@ -65,13 +64,12 @@ class CoevalMaps:
             
         elif (KIND == 1):
             Pd = Power_Spectrum.Deltasq_d_lin[_iz,:]/k3over2pi2
-            #Pdinterp = interp1d(klist,Pd,fill_value=0.0,bounds_error=False)
+            #Pdinterp = interp1d(klist,Pd,fill_value=0.0,bounds_error=False) OLD
             Pd_spl = spline(np.log(klist), np.log(Pd))
 
             pb = pbox.PowerBox(
                 N=self.Nbox,                     
                 dim=3,                     
-                #pk = lambda k: Pdinterp(k), 
                 pk = lambda k: np.exp(Pd_spl(np.log(k))), 
                 boxlength = self.Lbox,           
                 seed = self.seed               
@@ -82,7 +80,7 @@ class CoevalMaps:
             #then we make a map of the linear T21 fluctuation, better to use the cross to keep sign, at linear level same 
             PdT21 = Power_Spectrum.Deltasq_dT21[_iz]/k3over2pi2
 
-            # powerratioint = interp1d(klist,PdT21/Pd,fill_value=0.0,bounds_error=False)
+            #powerratioint = interp1d(klist,PdT21/Pd,fill_value=0.0,bounds_error=False) OLD
             powerratio_spl = spline(klist, PdT21/Pd) #cross can be negative, so can't interpolate over log values
 
 
@@ -96,7 +94,7 @@ class CoevalMaps:
             #NOTE: its not guaranteed to work, excess power can be negative in some cases! Not for each component xa, Tk, but yes for T21
             excesspower21 = (Power_Spectrum.Deltasq_T21[_iz,:]-Power_Spectrum.Deltasq_T21_lin[_iz,:])/k3over2pi2
 
-            lognormpower = interp1d(klist,excesspower21/self.T21global_noR**2,fill_value=0.0,bounds_error=False)
+            lognormpower = interp1d(klist,excesspower21/self.T21global**2,fill_value=0.0,bounds_error=False)
             #G or logG? TODO revisit
             pbe = pbox.LogNormalPowerBox(
                 N=self.Nbox,                     
@@ -200,22 +198,31 @@ class reionization_maps:
         self.boxlength = input_boxlength
         self.dx = self.boxlength/self.ncells
 
-        # radii
+        # # radii
         if Rs is None:
             default_len = len(CoeffStructure.Rtabsmoo)
             self.r_precision = r_precision
-            self.r = np.logspace(np.log10(self.dx * (3/4/np.pi)**(1/3)), np.log10(self.boxlength), int(default_len*self.r_precision))
+            self.r = np.logspace(np.log10(self.dx * (3/4/np.pi)**(1/3))* CoeffStructure.Rtabsmoo[0], np.log10(self.boxlength), int(default_len*self.r_precision))
             self._r_idx = np.arange(int(default_len*self.r_precision))
         else:
             self.r_precision = r_precision
-            self.r = Rs
+            self.r_all = Rs
             if self.r_precision > 1:
                 raise ValueError('r_precision cannot be greater than 1 if you input your own radii.')
-            self._r_idx = np.floor(np.arange(len(self.r), step=self.r_precision)).astype(int)
+            self._r_idx_all= np.floor(np.arange(len(self.r_all), step=self.r_precision)).astype(int)
             smallest_r = self.dx * (3/4/np.pi)**(1/3)
-            if self.r[0] < smallest_r:
+            if self.r_all[0] < smallest_r:
                 print(f'WARNING: Your input radii are too small for the pixel size. The code will still run now.\nIn the future, for best performance and physical accuracy on this boxlength and ncells, the smallest smoothing radius should be no less than R=L/N * (4pi/3)^(-1/3), or approximately {smallest_r:.2f} cMpc.')
-        
+
+        # !!! SL !!! 
+        # self.r_precision = r_precision
+        # self._r_idx_all = np.linspace(0, len(CoeffStructure.Rtabsmoo)-1, int(len(CoeffStructure.Rtabsmoo)*self.r_precision), dtype=int)
+        # self.r_all = CoeffStructure.Rtabsmoo[self._r_idx_all]
+
+        # self.r = self.r_all[self.r_all >= self.boxlength/self.ncells/(CoeffStructure.Rtabsmoo[0] * (4*np.pi/3)**(1/3))]
+        # self._r_idx = self._r_idx_all[self.r_all >= self.boxlength/self.ncells/(CoeffStructure.Rtabsmoo[0] * (4*np.pi/3)**(1/3))]
+        # !!! 
+
         self.seed = seed
 
         ### FLAGS
@@ -411,13 +418,7 @@ class reionization_maps:
 
         iterator = trange(len(self.z)) if self.PRINT_TIMER else range(len(self.z))
         for i in iterator:
-            # nion_spl = spline(sample_d, BMF.nion_delta_r_int(CosmoParams, sample_d, self.z, r)[:, i])
-            # nrec_spl = spline(sample_d, BMF.nrec(CosmoParams, sample_d, BMF.ion_frac, self.z)[:, i])
-            # partial_ion_spl = spline(sample_d, nion_spl(sample_d)/(1+nrec_spl(sample_d)))
             partial_ion_spl = spline(sample_d, BMF.prebarrier_xHII_int_grid(sample_d, self.z[i], r)) #spline is faster than RGI, so build a spline on sample densities
-
-            #if need to do by slices:
-            #np.array([partial_ion_noclip(maps.density_allz[:, i], maps.ion_field_allz[:, i], ir=0) for i in trange(300)]).transpose(1, 0, 2, 3)
             
             partialfield = np.abs(partial_ion_spl(self.density_allz[i]))
             sumfield = self.ion_field_allz[i] + partialfield
@@ -508,4 +509,3 @@ class reionization_maps:
             neutfrac[i] = np.sum(self.treion>tvalues[i]) / self.ncells**3
         return 1-neutfrac, tvalues
         
-
