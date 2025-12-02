@@ -62,10 +62,16 @@ if not os.path.exists(path):
 
 def run_many(Nruns,model,Lbox,with_shotnoise=True,Nbox=None, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=True,compute_partial_and_massweighted=False, extra_label='',seed_input=None,vary_cosmology=False):
 
+    failed_runs = 0
     for n in range(Nruns):
 
-        generate_maps_random(n, model,Lbox,Nbox,with_shotnoise,_R,Rmin_bubbles,compute_mass_weighted_xHII,compute_include_partlion,compute_partial_and_massweighted, extra_label,seed_input,vary_cosmology=vary_cosmology)
+        try:    
+            generate_maps_random(n, model,Lbox,Nbox,with_shotnoise,_R,Rmin_bubbles,compute_mass_weighted_xHII,compute_include_partlion,compute_partial_and_massweighted, extra_label,seed_input,vary_cosmology=vary_cosmology)
+        except:
+            failed_runs += 1
 
+    print('\n Failed runs: ' + str(failed_runs) + '/' + str(Nruns))
+    
     return 
 
 def import_random_model(nid, model,Lbox,with_shotnoise=True,Nbox = None, _R=None,include_partlion=True,vary_cosmology=False):
@@ -178,7 +184,7 @@ def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rm
     LP = a.Line_Parameters(LP_input,UP)
 
 
-    alphastar, betastar, epsstar, fesc, LX = extract_parameters()
+    alphastar, betastar, epsstar, fesc, alphaesc, LX = extract_parameters()
     if vary_cosmology:
         CP, ClassyC, HMFcl, zeus_corr = extract_cosmo_parameters()
     else:
@@ -187,7 +193,7 @@ def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rm
         HMFcl=HMFcl_fid 
         zeus_corr=zeus_corr_fid
 
-    AP, LIM_coeff, LIM_corr, LIM_pk, zeus_coeff, zeus_corr, zeus_pk = run_LIM(alphastar=alphastar,betastar=betastar,epsstar=epsstar,Mturn_fixed=None,Mc=None,fesc=fesc,LX=LX,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
+    AP, LIM_coeff, LIM_corr, LIM_pk, zeus_coeff, zeus_corr, zeus_pk = run_LIM(alphastar=alphastar,betastar=betastar,epsstar=epsstar,Mturn_fixed=None,Mc=None,fesc=fesc,alphaesc=alphaesc,LX=LX,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
 
     zvals = zeus_coeff.zintegral 
 
@@ -211,7 +217,7 @@ def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rm
     save_parameters_path = save_path + 'par_values.dat' 
     if not os.path.exists(save_parameters_path):
         with open(save_parameters_path, "w") as f:  # "w" to create new file
-            row_str = "nid\tepsstar\talphastar\tbetastar\tfesc\tLX"
+            row_str = "nid\tepsstar\talphastar\tbetastar\tfesc\talphaesc\tLX"
             f.write(f"{row_str}\n")
 
     with open(save_parameters_path, "a") as f:
@@ -220,6 +226,7 @@ def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rm
         f.write(f"{alphastar:.3f}\t")
         f.write(f"{betastar:.3f}\t")
         f.write(f"{fesc:.3f}\t")
+        f.write(f"{alphaesc:.3f}\t")
         f.write(f"{LX:.3f}\n")
  
     reionization_map_partial, ion_frac_withpartial = get_reio_field(zvals,zeus_coeff, zeus_corr, AP, CP, ClassyC, HMFcl, Lbox, Nbox, Rmin_bubbles, seed=seed, compute_mass_weighted_xHII=compute_mass_weighted_xHII,compute_include_partlion=compute_include_partlion,compute_partial_and_massweighted=compute_partial_and_massweighted)
@@ -308,6 +315,8 @@ epsstar_fid = AstroParams_input_fid_use['epsstar']
 sigma_epsstar = (epsstar_fid-epsstar_val[0])/Nsigma
 fesc_fid = AstroParams_input_fid_use['fesc10']
 sigma_fesc = (fesc_fid-fesc_val[0])/Nsigma
+alphaesc_fid = AstroParams_input_fid_use['alphaesc']
+sigma_alphaesc = (alphaesc_fid-(-0.1))/Nsigma
 LX_fid = np.log10(AstroParams_input_fid_use['L40_xray'] * 1e40)
 sigma_LX = (LX_fid-LX_val[0])/Nsigma
 
@@ -318,8 +327,9 @@ def extract_parameters():
     epsstar = np.random.normal(epsstar_fid, sigma_epsstar)
     fesc =  np.random.normal(fesc_fid, sigma_fesc)
     LX = np.random.normal(LX_fid, sigma_LX)
+    alphaesc = np.random.normal(alphaesc_fid, sigma_alphaesc)
 
-    return alphastar, betastar, epsstar, fesc, LX 
+    return alphastar, betastar, epsstar, fesc, alphaesc, LX 
 
 
 def extract_cosmo_parameters():

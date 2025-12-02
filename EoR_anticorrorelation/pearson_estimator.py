@@ -5,16 +5,19 @@ from matplotlib.patches import Patch
 from scipy.stats import binned_statistic
 
 
+zmax_integral = constants.ZMAX_INTEGRAL
+zmin = ZMIN
+zmin_low = zmin+1.
 _dlogzint_target_low = 0.02/(UP.precisionboost*3)
 _dlogzint_target = 0.02/UP.precisionboost
-zmin_low = ZMIN+1.
-Nzintegral_low= np.ceil(1.0 + np.log(zmin_low/ZMIN)/_dlogzint_target_low).astype(int)
-Nzintegral = np.ceil(1.0 + np.log(constants.ZMAX_INTEGRAL/zmin_low)/_dlogzint_target).astype(int)
-dlogzint_low = np.log(zmin_low/ZMIN)/(Nzintegral_low-1.0) #exact value rather than input target above
-dlogzint = np.log(constants.ZMAX_INTEGRAL/ZMIN)/(Nzintegral-1.0) #exact value rather than input target above
-zvals_low = np.logspace(np.log10(ZMIN), np.log10(zmin_low), Nzintegral_low)
-zvals_high = np.logspace(np.log10(zmin_low), np.log10(constants.ZMAX_INTEGRAL), Nzintegral)
-zvals = np.concatenate((zvals_low,zvals_high[1:]))
+Nzintegral_low = np.ceil(1.0 + np.log(zmin_low/zmin)/_dlogzint_target_low).astype(int)
+Nzintegral = np.ceil(1.0 + np.log(zmax_integral/zmin_low)/_dlogzint_target).astype(int)
+dlogzint_low = np.log(zmin_low/zmin)/(Nzintegral_low-1.0) #exact value rather than input target above
+dlogzint = np.log(zmax_integral/zmin_low)/(Nzintegral-1.0) #exact value rather than input target above
+zintegral_low = np.logspace(np.log10(zmin), np.log10(zmin_low), Nzintegral_low) #note these are also the z at which we "observe", to share computational load
+zintegral_high = np.logspace(np.log10(zmin_low), np.log10(zmax_integral), Nzintegral) #note these are also the z at which we "observe", to share computational load
+zvals = np.concatenate((zintegral_low,zintegral_high[1:]))
+
 
 #zvals_maps = (np.linspace(16, 6, int((16 - 6) / 0.1) + 1))
 

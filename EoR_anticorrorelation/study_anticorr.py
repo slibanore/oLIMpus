@@ -181,18 +181,20 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
     LP = a.Line_Parameters(LP_input,UP)
 
     if which_par == 'fstar':
-        mm = lambda epsstar: run_LIM(alphastar=None,betastar=None,epsstar=epsstar,Mturn_fixed=None,Mc=None,fesc=None,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
+        mm = lambda epsstar: run_LIM(alphastar=None,betastar=None,epsstar=epsstar,Mturn_fixed=None,Mc=None,fesc=None,alphaesc=None,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
     elif which_par == 'fesc':
-        mm = lambda fesc: run_LIM(alphastar=None,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=fesc,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
+        mm = lambda fesc: run_LIM(alphastar=None,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=fesc,alphaesc=None,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
     elif which_par == 'alphastar':
-        mm = lambda alpha: run_LIM(alphastar=alpha,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
+        mm = lambda alpha: run_LIM(alphastar=alpha,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,alphaesc=None,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
     elif which_par == 'betastar':
-        mm = lambda beta: run_LIM(alphastar=None,betastar=beta,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
+        mm = lambda beta: run_LIM(alphastar=None,betastar=beta,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,alphaesc=None,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
     elif which_par == 'LX':
-        mm = lambda LX: run_LIM(alphastar=None,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,LX=LX,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
+        mm = lambda LX: run_LIM(alphastar=None,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,alphaesc=None,LX=LX,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
+    elif which_par == 'alphaesc':
+        mm = lambda alphaesc: run_LIM(alphastar=None,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,alphaesc=alphaesc,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
     elif which_par == 'fiducial':
         par_vals = [0]
-        mm = lambda x: run_LIM(alphastar=None,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
+        mm = lambda x: run_LIM(alphastar=None,betastar=None,epsstar=None,Mturn_fixed=None,Mc=None,fesc=None,alphaesc=None,LX=None,LP=LP,CP=CP, ClassyC=ClassyC, HMFcl=HMFcl, zeus_corr=zeus_corr)
 
     p = []
     T21 = []
@@ -342,9 +344,9 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
     return
 
 
-def run_LIM(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,LX,LP,CP=CP_fid, ClassyC=ClassyC_fid, HMFcl=HMFcl_fid, zeus_corr=zeus_corr_fid):
+def run_LIM(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,alphaesc,LX,LP,CP=CP_fid, ClassyC=ClassyC_fid, HMFcl=HMFcl_fid, zeus_corr=zeus_corr_fid):
 
-    AP = change_astro(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,LX,CP)
+    AP = change_astro(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,alphaesc,LX,CP)
 
     # LIM
     LIM_coeff = a.get_LIM_coefficients(LP, AP, CP, HMFcl, UP, ZMIN)
@@ -363,7 +365,7 @@ def run_LIM(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,LX,LP,CP=CP_fid, Clas
     return AP, LIM_coeff, LIM_corr, LIM_pk, zeus_coeff, zeus_corr, zeus_pk
 
 
-def change_astro(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,LX,CP=CP_fid):
+def change_astro(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,alphaesc,LX,CP=CP_fid):
 
     AstroParams_input = copy(AstroParams_input_fid_use)
     if alphastar is not None:
@@ -378,6 +380,8 @@ def change_astro(alphastar,betastar,epsstar,Mturn_fixed,Mc,fesc,LX,CP=CP_fid):
         AstroParams_input['Mc'] = Mc
     if fesc is not None:
         AstroParams_input['fesc10'] = fesc
+    if alphaesc is not None:
+        AstroParams_input['alphaesc'] = alphaesc
     if LX is not None:
         AstroParams_input['L40_xray'] = 10**LX/1e40
         
