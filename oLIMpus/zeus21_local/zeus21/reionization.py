@@ -25,14 +25,14 @@ class BMF:
     
     """
     
-    def __init__(self, CoeffStructure, HMFintclass, CosmoParams, AstroParams, ClassyCosmo, R_linear_sigma_fit_input=10, FLAG_converge=True, max_iter=10, ZMAX_REION = 30, Rmin=0.05):
+    def __init__(self, CoeffStructure, HMFintclass, CosmoParams, AstroParams, ClassyCosmo, R_linear_sigma_fit_input=10, FLAG_converge=True, max_iter=10, ZMAX_REION = 30, Rmin=0.05, PRINT_SUCCESS=True):
 
+        self.PRINT_SUCCESS = PRINT_SUCCESS
         self.ZMAX_REION = ZMAX_REION #max redshift up to which we calculate reionization observables
         self.zlist = CoeffStructure.zintegral
         self.Rs = CoeffStructure.Rtabsmoo
         self.Rs_BMF = np.logspace(np.log10(Rmin), np.log10(self.Rs[-1]), 100)
         self.ds_array = np.linspace(-1, 5, 101)
-
         
         self.gamma = CoeffStructure.gamma_niondot_II_index2D
         self.gamma2 = CoeffStructure.gamma2_niondot_II_index2D
@@ -60,7 +60,7 @@ class BMF:
         zr_mesh = np.meshgrid(np.arange(len(self.Rs)), np.arange(len(self.zlist)))
         self.nion_norm = self.nion_normalization(zr_mesh[1], zr_mesh[0])
         self.nion_norm_int = RegularGridInterpolator(self.zr, self.nion_norm, bounds_error = False, fill_value = np.nan)
-        
+
         self.prebarrier_xHII = np.empty((len(self.ds_array), len(self.zlist), len(self.Rs)))
         self.barrier = self.compute_barrier(CosmoParams, self.ion_frac, self.zlist, self.Rs)
         self.barrier_initial = np.copy(self.barrier)
@@ -80,6 +80,7 @@ class BMF:
         if FLAG_converge:
             self.converge_BMF(CosmoParams, self.ion_frac, max_iter=max_iter)
         #two functions: compute BMF and iterate
+        
 
     def compute_prebarrier_xHII(self, CosmoParams, ion_frac, z, R):
         """
@@ -111,7 +112,6 @@ class BMF:
             The resultant density threshold array. First dimension is each redshift, second dimension is each radius scale.
         """
         barrier = np.zeros((len(z), len(R)))
-        ds_array = np.linspace(-1, 5, 101)
 
         zarg = np.argsort(z) #sort just in case
         z = z[zarg]
@@ -119,13 +119,9 @@ class BMF:
         
         for ir in range(len(R)):
             #Compute nion_values and nrec_values for this 'ir'
-            # nion_values = self.nion_delta_r_int(CosmoParams, ds_array, z, R[ir])  #Shape (nd, nz)
-            # nrec_values = self.nrec(CosmoParams, ds_array, ion_frac, z)             #Shape (nd, nz)
-            # total_values = np.log10(nion_values / (1 + nrec_values) + 1e-10)   #taking difference in logspace to find zero-crossing 
-
             self.prebarrier_xHII[:, :, ir] =  self.compute_prebarrier_xHII(CosmoParams, ion_frac, z, R[ir])
             total_values = np.log10(self.prebarrier_xHII[:, :, ir] + 1e-10)
-
+        
             #Loop over redshift indices
             for iz in range(len(self.zlist)):
                 y_values = total_values[:, iz]  #Shape (nd,)
@@ -175,7 +171,7 @@ class BMF:
 
         if d_array is None:
             d_array = self.ds_array
-
+        
         #reverse the inputs to make the integral easier to compute
         z_rev = z[::-1]
         Hz_rev = cosmology.Hubinvyr(CosmoParams, z_rev)
@@ -249,6 +245,7 @@ class BMF:
         """
 
         z.sort() #sort if not sorted
+
         if d_array is None:
             d_array = self.ds_array
         
@@ -257,7 +254,6 @@ class BMF:
         Hz_rev = cosmology.Hubinvyr(CosmoParams, z_rev)
     
         niondot_values = self.niondot_delta_r(CosmoParams, z, R, d_array)
-        # niondot_values = self.niondot_delta_r(CosmoParams, d_array, z, R)
     
         integrand = -1 / (1 + z_rev) / Hz_rev * niondot_values[:, ::-1]
         nion = cumulative_trapezoid(integrand, x=z_rev, initial=0)[:, ::-1] #reverse back to increasing z order
@@ -311,8 +307,7 @@ class BMF:
 
     def converge_BMF(self, CosmoParams, ion_frac_input, max_iter):
         self.ion_frac = ion_frac_input
-#        for j in range(max_iter):
-        iterator = range(max_iter)#trange(max_iter) if self.PRINT_SUCCESS else range(max_iter)
+        iterator = trange(max_iter) if self.PRINT_SUCCESS else range(max_iter)
         for j in iterator:
             ion_frac_prev = np.copy(self.ion_frac)
             
@@ -329,7 +324,8 @@ class BMF:
             self.ion_frac[self.barrier[:, -1]<=0] = 1
 
             if np.allclose(ion_frac_prev, self.ion_frac):
-                #print(f'SUCCESS: BMF converged in {j} iterations.')
+                if self.PRINT_SUCCESS:
+                    print(f'SUCCESS: BMF converged in {j} iterations.')
                 return 
             
         print(f"WARNING: BMF didn't converge within {max_iter} iterations.")
@@ -376,7 +372,7 @@ class BMF:
         return self.interpR(z, R, self.nion_norm_int)
     def nion_normz_int(self, z, R):
         return self.interpz(z, R, self.nion_norm_int)
-    
+
     def prebarrier_xHII_int_grid(self, d, z, R):
         """
         Evaluate prebarrier xHII on a density field d(x),
