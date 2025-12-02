@@ -20,14 +20,19 @@ class get_LIM_coefficients:
 
     ### STEP 0: Defining Constants and storage variables
 
+        #define the integration redshifts, goes as log(z) (1+ doesn't change sampling much)
         self.zmax_integral = constants.ZMAX_INTEGRAL
-        self.zmin = zmin 
-
+        self.zmin = zmin
+        self.zmin_low = zmin+1.
+        self._dlogzint_target_low = 0.02/(User_Parameters.precisionboost*3)
         self._dlogzint_target = 0.02/User_Parameters.precisionboost
-        self.Nzintegral = np.ceil(1.0 + np.log(self.zmax_integral/self.zmin)/self._dlogzint_target).astype(int)
-        self.dlogzint = np.log(self.zmax_integral/self.zmin)/(self.Nzintegral-1.0) #exact value rather than input target above
-
-        self.zintegral = np.logspace(np.log10(self.zmin), np.log10(self.zmax_integral), self.Nzintegral)
+        self.Nzintegral_low = np.ceil(1.0 + np.log(self.zmin_low/self.zmin)/self._dlogzint_target_low).astype(int)
+        self.Nzintegral = np.ceil(1.0 + np.log(self.zmax_integral/self.zmin_low)/self._dlogzint_target).astype(int)
+        self.dlogzint_low = np.log(self.zmin_low/self.zmin)/(self.Nzintegral_low-1.0) #exact value rather than input target above
+        self.dlogzint = np.log(self.zmax_integral/self.zmin_low)/(self.Nzintegral-1.0) #exact value rather than input target above
+        self.zintegral_low = np.logspace(np.log10(self.zmin), np.log10(self.zmin_low), self.Nzintegral_low) #note these are also the z at which we "observe", to share computational load
+        self.zintegral_high = np.logspace(np.log10(self.zmin_low), np.log10(self.zmax_integral), self.Nzintegral) #note these are also the z at which we "observe", to share computational load
+        self.zintegral = np.concatenate((self.zintegral_low,self.zintegral_high[1:]))
 
         # compute sigmaR for the required resolution and redshift array
         self.sigmaofRtab_LIM = np.array([HMF_interpolator.sigmaR_int(Line_Parameters._R, zz) for zz in self.zintegral]).T[0]
