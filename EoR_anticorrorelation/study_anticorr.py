@@ -62,11 +62,11 @@ AstroParams_input_fid_use = dict(
 
 
 # set to get reionizatin between 5 and 8 when all other parameters are set to their fiducials
-epsstar_val = [0.01,0.04,0.3,0.9]#np.logspace(np.log10(0.04),np.log10(0.3),10)
-fesc_val = [0.01,0.05,0.25,0.5]#np.logspace(np.log10(0.05),np.log10(0.15),10)
+epsstar_val = [0.01,0.04,0.2,0.3]#np.logspace(np.log10(0.04),np.log10(0.3),10)
+fesc_val = [0.01,0.05,0.3,0.5]#np.logspace(np.log10(0.05),np.log10(0.15),10)
 alphastar_val = np.linspace(0.3,0.8,10)
 betastar_val = np.linspace(-1,0.,10)
-LX_val = [39.5,40.5,41.5,42.5]#np.linspace(40.5,41.5,10)
+LX_val = [40.,40.5,41.5,42.]#np.linspace(40.5,41.5,10)
 
 path = './runs/'
 if not os.path.exists(path):
@@ -320,6 +320,7 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
             'with_shotnoise': with_shotnoise
         },
         'outputs': {
+            'z':zvals,
             'p': p,
             'T21': T21,
             'xHv': xHv,

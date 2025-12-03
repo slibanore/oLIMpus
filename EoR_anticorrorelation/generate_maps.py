@@ -279,6 +279,7 @@ def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rm
             'with_shotnoise': with_shotnoise
         },
         'outputs': {
+            'z':zvals,
             'p': p,
             'T21': T21,
             'xHv': xHv,
@@ -306,19 +307,19 @@ def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rm
 
     return 
 
-Nsigma = 3.
+Nsigma = 1.
 alphastar_fid = AstroParams_input_fid_use['alphastar']
-sigma_alphastar = (alphastar_fid-alphastar_val[0])/Nsigma
+sigma_alphastar = 0.1 #(alphastar_fid-alphastar_val[0])/Nsigma
 betastar_fid = AstroParams_input_fid_use['betastar']
-sigma_betastar = (betastar_fid-betastar_val[0])/Nsigma
+sigma_betastar = 0.1 #(betastar_fid-betastar_val[0])/Nsigma
 epsstar_fid = AstroParams_input_fid_use['epsstar']
-sigma_epsstar = (epsstar_fid-epsstar_val[0])/Nsigma
+sigma_epsstar = 0.1 #(epsstar_fid-epsstar_val[0])/Nsigma
 fesc_fid = AstroParams_input_fid_use['fesc10']
-sigma_fesc = (fesc_fid-fesc_val[0])/Nsigma
+sigma_fesc = 0.2 #(fesc_fid-fesc_val[0])/Nsigma
 alphaesc_fid = AstroParams_input_fid_use['alphaesc']
-sigma_alphaesc = (alphaesc_fid-(-0.1))/Nsigma
+sigma_alphaesc = 0.3 #(alphaesc_fid-(-0.1))/Nsigma
 LX_fid = np.log10(AstroParams_input_fid_use['L40_xray'] * 1e40)
-sigma_LX = (LX_fid-LX_val[0])/Nsigma
+sigma_LX = 0.5 #(LX_fid-LX_val[0])/Nsigma
 
 def extract_parameters():
 

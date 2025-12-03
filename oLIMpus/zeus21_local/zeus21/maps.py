@@ -202,7 +202,7 @@ class reionization_maps:
         if Rs is None:
             default_len = len(CoeffStructure.Rtabsmoo)
             self.r_precision = r_precision
-            self.r = np.logspace(np.log10(self.dx * (3/4/np.pi)**(1/3))* CoeffStructure.Rtabsmoo[0], np.log10(self.boxlength), int(default_len*self.r_precision))
+            self.r = np.logspace(np.log10(self.dx * (3/4/np.pi)**(1/3))/ CoeffStructure.Rtabsmoo[0], np.log10(self.boxlength), int(default_len*self.r_precision))
             self._r_idx = np.arange(int(default_len*self.r_precision))
         else:
             self.r_precision = r_precision
