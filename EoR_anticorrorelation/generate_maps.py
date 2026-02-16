@@ -65,8 +65,9 @@ def run_many(Nruns,model,Lbox,with_shotnoise=True,Nbox=None, _R = None,Rmin_bubb
     failed_runs = 0
     for n in range(Nruns):
 
+        nuse = n
         try:    
-            generate_maps_random(n, model,Lbox,Nbox,with_shotnoise,_R,Rmin_bubbles,compute_mass_weighted_xHII,compute_include_partlion,compute_partial_and_massweighted, extra_label,seed_input,vary_cosmology=vary_cosmology)
+            generate_maps_random(nuse, model,Lbox,Nbox,with_shotnoise,_R,Rmin_bubbles,compute_mass_weighted_xHII,compute_include_partlion,compute_partial_and_massweighted, extra_label,seed_input,vary_cosmology=vary_cosmology)
         except:
             failed_runs += 1
 
@@ -307,30 +308,40 @@ def generate_maps_random(nid, model,Lbox,Nbox, with_shotnoise=True, _R = None,Rm
 
     return 
 
-Nsigma = 1.
-alphastar_fid = AstroParams_input_fid_use['alphastar']
-sigma_alphastar = 0.1 #(alphastar_fid-alphastar_val[0])/Nsigma
-betastar_fid = AstroParams_input_fid_use['betastar']
-sigma_betastar = 0.1 #(betastar_fid-betastar_val[0])/Nsigma
-epsstar_fid = AstroParams_input_fid_use['epsstar']
-sigma_epsstar = 0.1 #(epsstar_fid-epsstar_val[0])/Nsigma
-fesc_fid = AstroParams_input_fid_use['fesc10']
-sigma_fesc = 0.2 #(fesc_fid-fesc_val[0])/Nsigma
-alphaesc_fid = AstroParams_input_fid_use['alphaesc']
-sigma_alphaesc = 0.3 #(alphaesc_fid-(-0.1))/Nsigma
+#Nsigma = 2.
+epsstar_fid = -1.25
+sigma_epsstar = 0.3 #(epsstar_fid-epsstar_val[0])/Nsigma
+fesc_fid = -1.01
+sigma_fesc = 0.4 #(fesc_fid-fesc_val[0])/Nsigma
 LX_fid = np.log10(AstroParams_input_fid_use['L40_xray'] * 1e40)
-sigma_LX = 0.5 #(LX_fid-LX_val[0])/Nsigma
+sigma_LX = 0.7 #(LX_fid-LX_val[0])/Nsigma
+
+# alphastar_fid = AstroParams_input_fid_use['alphastar']
+# sigma_alphastar = 0.1 #(alphastar_fid-alphastar_val[0])/Nsigma
+# betastar_fid = AstroParams_input_fid_use['betastar']
+# sigma_betastar = 0.1 #(betastar_fid-betastar_val[0])/Nsigma
+# alphaesc_fid = AstroParams_input_fid_use['alphaesc']
+# sigma_alphaesc = 0.3 #(alphaesc_fid-(-0.1))/Nsigma
 
 def extract_parameters():
 
-    alphastar = np.random.normal(alphastar_fid, sigma_alphastar)
-    betastar = np.random.normal(betastar_fid, sigma_betastar)
-    epsstar = np.random.normal(epsstar_fid, sigma_epsstar)
-    fesc =  np.random.normal(fesc_fid, sigma_fesc)
-    LX = np.random.normal(LX_fid, sigma_LX)
-    alphaesc = np.random.normal(alphaesc_fid, sigma_alphaesc)
+    alphastar = AstroParams_input_fid_use['alphastar'] #np.random.normal(alphastar_fid, sigma_alphastar)#
+    betastar = AstroParams_input_fid_use['betastar'] #np.random.normal(betastar_fid, sigma_betastar)#
+    alphaesc = AstroParams_input_fid_use['alphaesc'] #np.random.normal(alphaesc_fid, sigma_alphaesc)#
 
-    return alphastar, betastar, epsstar, fesc, alphaesc, LX 
+    # Mean vector
+    mean = np.array([epsstar_fid, fesc_fid, LX_fid])
+
+    # Covariance matrix (diagonal -> no correlations)
+    cov = np.diag([sigma_epsstar**2, sigma_fesc**2, sigma_LX**2])
+
+    sample = np.random.multivariate_normal(mean, cov, size=1)
+    
+    epsstar = 10**sample[:,0] /2
+    fesc = 10**sample[:,1]
+    LX = sample[:,2]
+
+    return alphastar, betastar, epsstar[0], fesc[0], alphaesc, LX[0]
 
 
 def extract_cosmo_parameters():

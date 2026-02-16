@@ -169,6 +169,9 @@ class get_LIM_coefficients:
 
             # c1 = cm / sr / Hz so once is multiplied by rhoL gives Jy/sr
             self.coeff1_LIM = ((constants.c_kms * u.km/u.s / (4*np.pi *u.steradian) / (cosmology.Hub(Cosmo_Parameters, self.zintegral) * u.km/u.s/u.Mpc) / (Line_Parameters.nu_rest) * u.Lsun / u.Mpc**3).to(u.Jy/u.steradian)).value
+
+            if Line_Parameters.LINE == 'SFRD':
+                self.coeff1_LIM = 1.
         else:
             print('\nCHECK OBSERVABLE FOR LIM!')
             self.coeff1_LIM = -1

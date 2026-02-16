@@ -45,8 +45,10 @@ class Line_Parameters:
 
         self.LINE = LineParams_Input.LINE # which line to use 
         
-        if self.LINE == 'OIII':
+        if self.LINE == 'OIII4960':
             lambda_line = 4960*u.AA 
+        elif self.LINE == 'OIII5007' or self.LINE == 'OIII':
+            lambda_line = 5007*u.AA 
         elif self.LINE == 'OII':
             lambda_line = 3727*u.AA 
         elif self.LINE == 'Ha':
@@ -59,6 +61,8 @@ class Line_Parameters:
             lambda_line = 1.3e7*u.AA 
         elif self.LINE == 'CO10': # 2-1 transition
             lambda_line = 2.6e7*u.AA 
+        elif self.LINE == 'SFRD': # 2-1 transition
+            lambda_line = 1.*u.AA 
         self.nu_rest = (cu.c / (lambda_line)).to(u.Hz) # rest frame frequency in Hz 
 
         self.OBSERVABLE_LIM = LineParams_Input.OBSERVABLE_LIM
@@ -85,11 +89,18 @@ class Line_Parameters:
 ####################
 # Define parameters for some of the models included in the LIM file
 
-Yang24_OIII_params = {
-        'alpha': 9.82e-2,
-        'beta': 6.90e-1,
-        'N': 2.75e7,
-        'SFR1': 1.24e2,
+Yang24_OIII4960_params = {
+        'alpha': 9.46e-2,
+        'beta': 9.24e-1,
+        'N': 2.61e7,
+        'SFR1': 9.60e1,
+        }
+
+Yang24_OIII5007_params = {
+        'alpha': 9.48e-2,
+        'beta': 9.28e-1,
+        'N': 7.68e7,
+        'SFR1': 9.76e1,
         }
 
 Yang24_OII_params = {

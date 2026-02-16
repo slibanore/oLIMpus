@@ -17,8 +17,10 @@ def powerlaw(line, dotM, line_dict):
 def Yang24(line, dotM, line_dict):
 
     if line_dict is None:
-        if line == 'OIII':
-            line_dict = inputs_LIM.Yang24_OIII_params
+        if line == 'OIII4960':
+            line_dict = inputs_LIM.Yang24_OIII4960_params
+        elif line == 'OIII5007' or 'OIII':
+            line_dict = inputs_LIM.Yang24_OIII5007_params
         elif line == 'OII':
             line_dict = inputs_LIM.Yang24_OII_params
         elif line== 'Ha':
@@ -45,7 +47,7 @@ def Yang24(line, dotM, line_dict):
 def THESAN21(line, dotM, line_dict):
 
     if line_dict is None:
-        if line == 'OIII':
+        if line == 'OIII' or line == 'OIII4960' or line == 'OIII5007':
             line_dict = inputs_LIM.THESAN21_OIII_params
         elif line == 'OII':
             line_dict = inputs_LIM.THESAN21_OII_params

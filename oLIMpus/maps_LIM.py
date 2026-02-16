@@ -647,7 +647,7 @@ def plot_lightcone(which_lightcone,
         vmax = max_value
     elif which_lightcone == 'LIM':
         text_label_helper = r'$I_{\rm %s}\,[{\rm Jy/sr}]$'%LineParams.LINE
-        use_cmap = LIM_colour_1 if LineParams.LINE == 'OIII' else LIM_colour_2
+        use_cmap = LIM_colour_1 if LineParams.LINE[:4] == 'OIII' else LIM_colour_2
         vmin = 0.
         vmax = 0.5*np.max(lightcone)
     else:

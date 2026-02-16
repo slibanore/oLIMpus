@@ -62,11 +62,11 @@ AstroParams_input_fid_use = dict(
 
 
 # set to get reionizatin between 5 and 8 when all other parameters are set to their fiducials
-epsstar_val = [0.01,0.04,0.2,0.3]#np.logspace(np.log10(0.04),np.log10(0.3),10)
-fesc_val = [0.01,0.05,0.3,0.5]#np.logspace(np.log10(0.05),np.log10(0.15),10)
+epsstar_val = [0.01,0.04,0.3,0.9]#np.logspace(np.log10(0.04),np.log10(0.3),10)
+fesc_val = [0.01,0.05,0.25,0.5]#np.logspace(np.log10(0.05),np.log10(0.15),10)
 alphastar_val = np.linspace(0.3,0.8,10)
 betastar_val = np.linspace(-1,0.,10)
-LX_val = [40.,40.5,41.5,42.]#np.linspace(40.5,41.5,10)
+LX_val = [39.5,40.5,41.5,42.5]#np.linspace(40.5,41.5,10)
 
 path = './runs/'
 if not os.path.exists(path):
@@ -116,7 +116,7 @@ def import_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox = None, 
     return outputs
 
 
-def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=None,save_maps=False, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=False,compute_partial_and_massweighted=True, extra_label='',seed_input=None, reionization_by_z = False,CP=CP_fid, ClassyC=ClassyC_fid, HMFcl=HMFcl_fid, zeus_corr=zeus_corr_fid):
+def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=None,save_maps=False, _R = None,Rmin_bubbles=0.05,compute_mass_weighted_xHII=False,compute_include_partlion=False,compute_partial_and_massweighted=True, extra_label='',seed_input=None, reionization_by_z = False,CP=CP_fid, ClassyC=ClassyC_fid, HMFcl=HMFcl_fid, zeus_corr=zeus_corr_fid,use_zvals_input=None):
 
     if model == 'OIII':
         LP_input = a.LineParams_Input(
@@ -211,14 +211,15 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
         seed = np.random.randint(0, 2**32) if seed_input == None else seed_input
         AP, LIM_coeff, LIM_corr, LIM_pk, zeus_coeff, zeus_corr, zeus_pk = mm(par_vals[i])
 
-        if save_maps:
-            zvals = zeus_coeff.zintegral 
+        if use_zvals_input is None:
+            use_zvals = zeus_coeff.zintegral 
         else:   
-            zvals = zeus_coeff.zintegral
+            use_zvals = use_zvals_input
 
-        xHv.append(np.zeros((len(zvals))))
-        T21.append(np.zeros((len(zvals))))
-        p.append(np.zeros((len(zvals))))
+
+        xHv.append(np.zeros((len(use_zvals))))
+        T21.append(np.zeros((len(use_zvals))))
+        p.append(np.zeros((len(use_zvals))))
         r.append([])
         k_cross.append([]) 
         pk_cross.append([]) 
@@ -229,13 +230,13 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
             os.makedirs(path +  'maps_L' + str(Lbox) +'_N' + str(Nbox) +  '/')
 
         if not reionization_by_z:
-            reionization_map_partial_allz, ion_frac_withpartial_allz = get_reio_field(zvals,zeus_coeff, zeus_corr, AP, CP, ClassyC, HMFcl, Lbox, Nbox, Rmin_bubbles, seed=seed, compute_mass_weighted_xHII=compute_mass_weighted_xHII,compute_include_partlion=compute_include_partlion,compute_partial_and_massweighted=compute_partial_and_massweighted)
+            reionization_map_partial_allz, ion_frac_withpartial_allz = get_reio_field(use_zvals,zeus_coeff, zeus_corr, AP, CP, ClassyC, HMFcl, Lbox, Nbox, Rmin_bubbles, seed=seed, compute_mass_weighted_xHII=compute_mass_weighted_xHII,compute_include_partlion=compute_include_partlion,compute_partial_and_massweighted=compute_partial_and_massweighted)
 
-        for zv in tqdm(range(len(zvals))):
+        for zv in tqdm(range(len(use_zvals))):
 
             if reionization_by_z:
-                print('\n--- Doing id = ' + str(zv+1) + '/' +  str(len(zvals)) + ' ---\n')
-                reionization_map_partial_arr, ion_frac_withpartial_arr = get_reio_field(zvals[zv],zeus_coeff, zeus_corr, AP, CP, ClassyC, HMFcl, Lbox, Nbox, Rmin_bubbles, seed=seed, compute_mass_weighted_xHII=compute_mass_weighted_xHII,compute_include_partlion=compute_include_partlion,compute_partial_and_massweighted=compute_partial_and_massweighted)
+                print('\n--- Doing id = ' + str(zv+1) + '/' +  str(len(use_zvals)) + ' ---\n')
+                reionization_map_partial_arr, ion_frac_withpartial_arr = get_reio_field(use_zvals[zv],zeus_coeff, zeus_corr, AP, CP, ClassyC, HMFcl, Lbox, Nbox, Rmin_bubbles, seed=seed, compute_mass_weighted_xHII=compute_mass_weighted_xHII,compute_include_partlion=compute_include_partlion,compute_partial_and_massweighted=compute_partial_and_massweighted)
                 
                 reionization_map_partial = reionization_map_partial_arr[0]
                 ion_frac_withpartial = ion_frac_withpartial_arr[0]
@@ -243,14 +244,14 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
                 reionization_map_partial = reionization_map_partial_allz[zv]
                 ion_frac_withpartial = ion_frac_withpartial_allz[zv]
 
-            box_line_all = CoevalBox_LIM_analytical(LIM_coeff,LIM_corr,LIM_pk,LP,zvals[zv],LP._R,Lbox,Nbox, RSD=RSD_MODE, get_density_box=True,seed=seed,)
+            box_line_all = CoevalBox_LIM_analytical(LIM_coeff,LIM_corr,LIM_pk,LP,use_zvals[zv],LP._R,Lbox,Nbox, RSD=RSD_MODE, get_density_box=True,seed=seed,)
 
             if with_shotnoise:
                 box_line = box_line_all.Inu_box_smooth
             else:
                 box_line = box_line_all.Inu_box_noiseless_smooth
 
-            box_T21 = CoevalBox_T21reionization(zeus_coeff, zeus_pk, np.asarray([zvals[zv]]), reionization_map_partial, ion_frac_withpartial, Lbox, Nbox, seed, MAP_T21_FULL = True,input_Resolution=_R)
+            box_T21 = CoevalBox_T21reionization(zeus_coeff, zeus_pk, np.asarray([use_zvals[zv]]), reionization_map_partial, ion_frac_withpartial, Lbox, Nbox, seed, MAP_T21_FULL = True,input_Resolution=_R)
 
             xHv[i][zv] = box_T21.xH_avg_map
             T21[i][zv] = np.mean(box_T21.T21_map)
@@ -275,7 +276,7 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
                     with open(save_path_density, "a") as f_den:
                         for x in range(Nbox):
                                 row_str = " ".join(f"{val:.6e}" for val in box_delta[0][x])
-                                f_den.write(f"{zvals[zv]:.3f} {row_str}\n")
+                                f_den.write(f"{use_zvals[zv]:.3f} {row_str}\n")
 
                 #box_Pearson = (box_T21.T21_map[0]-T21[0][zv])*(box_line[0]-np.mean(box_line[0])) #/ np.sqrt(np.sum((box_T21.T21_map[0]-T21[0][zv])**2)*np.sum((box_line[0]-np.mean(box_line[0]))**2))
 
@@ -283,23 +284,17 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
                     for x in range(Nbox):
                             box_T21.T21_map[x][np.isnan(box_T21.T21_map[x])] = 0.
                             row_str = " ".join(f"{val:.6e}" for val in box_line[0][x])
-                            f_line.write(f"{zvals[zv]:.3f} {row_str}\n")
+                            f_line.write(f"{use_zvals[zv]:.3f} {row_str}\n")
                             row_str = " ".join(f"{val:.6e}" for val in box_T21.xH_box[x])
-                            f_xH.write(f"{zvals[zv]:.3f} {row_str}\n")
+                            f_xH.write(f"{use_zvals[zv]:.3f} {row_str}\n")
                             row_str = " ".join(f"{val:.6e}" for val in box_T21.T21_map[x])
-                            f_21.write(f"{zvals[zv]:.3f} {row_str}\n")
+                            f_21.write(f"{use_zvals[zv]:.3f} {row_str}\n")
                             #row_str = " ".join(f"{val:.6e}" for val in box_Pearson[x])
-                            #f_P.write(f"{zvals[zv]:.3f} {row_str}\n")
+                            #f_P.write(f"{use_zvals[zv]:.3f} {row_str}\n")
 
             if model == 'SFRDxH':
                 temp_v = r_cross(box_line,box_T21.xH_box, Lbox, k_bins, foregrounds=False)
                 p[i][zv] = Pearson_unnorm(box_line,box_T21.xH_box,False)
-                fig,ax = plt.subplots(1,2)
-                ax[0].set_title(r'$z=%g$'%zvals[zv])
-                ax[1].set_title(r'$z=%g$'%zvals[zv])
-                # im = ax[0].imshow(box_line[0])
-                # im = ax[1].imshow(box_T21.xH_box[0])
-                # plt.show()
             elif model == 'SFRDT21nb':
                 temp_v = r_cross(box_line,box_T21.T21_map_only, Lbox, k_bins, foregrounds=False)
                 p[i][zv] = Pearson(box_line,box_T21.T21_map_only,False)
@@ -320,7 +315,7 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
             'with_shotnoise': with_shotnoise
         },
         'outputs': {
-            'z':zvals,
+            'z':use_zvals,
             'p': p,
             'T21': T21,
             'xHv': xHv,
