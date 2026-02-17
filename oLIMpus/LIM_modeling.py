@@ -12,6 +12,7 @@ import numpy as np
 import astropy.units as u 
 import astropy.constants as cu 
 from scipy.integrate import simpson
+from scipy.stats import lognorm
 
 # Define the coefficients to be used in the LIM auto spectra computation; zmin is down to which the computation is performed
 class get_LIM_coefficients:
@@ -301,7 +302,7 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
         elif len(log_muL.shape) == 3:
             Lval = np.logspace(-50,20,503)[:,np.newaxis,np.newaxis,np.newaxis]
 
-        coef = 1/(np.sqrt(2*np.pi)*sigma_L*Lval)
+        coef = 1./(np.sqrt(2*np.pi)*sigma_L*Lval)
 
         # lognormal distribution
 
@@ -310,5 +311,7 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
         p_logL[p_logL < 1e-50] = 0.
 
         L_of_Mh = simpson(p_logL * Lval, Lval, axis=0)
+
+    L_of_Mh[dotM < 1e-20] = 0.
 
     return L_of_Mh

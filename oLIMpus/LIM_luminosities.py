@@ -6,6 +6,8 @@ def powerlaw(line, dotM, line_dict):
 
     L = dotM**line_dict['alpha_SFR']
     log10_L = np.log10(L)
+    log10_L[np.isnan(log10_L)] = 0.    
+    log10_L[np.isinf(abs(log10_L))] = 0.    
 
     return log10_L
 
