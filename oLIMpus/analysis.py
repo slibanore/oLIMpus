@@ -31,6 +31,8 @@ CosmoParams_input_fid = dict(
         tau_fid = 0.05430842, 
         HMF_CHOICE= "ST",
         Flag_emulate_21cmfast = False,
+        _Mhmin = 1e5,
+        _Mhmax = 1e14
         )
 
 AstroParams_input_fid = dict(

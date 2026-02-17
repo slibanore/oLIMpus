@@ -213,10 +213,8 @@ class HMF_interpolator:
 
     def __init__(self, User_Parameters, Cosmo_Parameters, ClassCosmo):
 
-        self._Mhmin = 1e5 #originally 1e5
-        self._Mhmax = 1e14
         self._NMhs = np.floor(35*User_Parameters.precisionboost).astype(int)
-        self.Mhtab = np.logspace(np.log10(self._Mhmin),np.log10(self._Mhmax),self._NMhs) # Halo mases in Msun
+        self.Mhtab = np.logspace(np.log10(Cosmo_Parameters._Mhmin),np.log10(Cosmo_Parameters._Mhmax),self._NMhs) # Halo mases in Msun
         self.RMhtab = RadofMh(Cosmo_Parameters, self.Mhtab)
 
         self.logtabMh = np.log(self.Mhtab)
