@@ -102,6 +102,17 @@ class CoevalBox_LIM_analytical:
             )
             self.Inu_box_noiseless = pb.delta_x()/1e5 + self.Inu_bar
 
+            if np.all(np.isnan(self.Inu_box_noiseless)):
+                pb = pbox.LogNormalPowerBox(
+                    N=self.Nbox,                     
+                    dim= 3,                     
+                    pk = lambda k: Pnu_interp(k), 
+                    boxlength = self.Lbox,           
+                    seed = self.seed,
+                )
+                self.Inu_box_noiseless = pb.delta_x() + self.Inu_bar
+
+
         else:
             # produce Gaussian box with boosted power spectrum
             pb = pbox.LogNormalPowerBox(
