@@ -124,6 +124,7 @@ class CoevalBox_LIM_analytical:
             )
             self.Inu_box_noiseless = pb.delta_x() + self.Inu_bar
 
+        print("\nFor reference, np.mean(pb.delta_x()**2) =", np.mean(pb.delta_x()**2))
 
         # create shot noise box
         if Line_Parameters.shot_noise:
@@ -383,10 +384,10 @@ class CoevalMaps_T21noreionization:
             seed = self.seed+1                # uncorrelated
         )
 
-        self.T21mapNL = self.T21global_noR*pbe.delta_x()
+        self.T21mapNL =self.T21global_noR* pbe.delta_x()
 
         #and finally, just add them together!
-        self.T21map = self.T21maplin +  self.T21mapNL
+        self.T21map =  self.T21maplin + self.T21mapNL 
 
 
 
@@ -690,3 +691,442 @@ def plot_lightcone(which_lightcone,
     plt.tight_layout()
 
     return 
+
+
+
+class generate_asym_boxes:
+    
+    def __init__(self, 
+                z,
+                Lx, Ly, Lz,
+                Nx, Ny, Nz,
+                T21_coefficients, T21_corr, Power_Spectrum, 
+                massweighted_reio,
+                LIM_coeff, LIM_Power_Spectrum, 
+                Line_Parameters, 
+                Astro_Parameters,
+                HMF_interpolator, ClassyCosmo, Cosmo_Parameters, 
+                RSD,
+                seed=1605, 
+                ):
+        
+        """
+        Generate a lognormal random field with arbitrary box geometry, for both LIM and 21cm 
+
+        Parameters
+        ----------
+        z: float or array
+            Redshift 
+        Lx, Ly, Lz : float
+            Physical box lengths.
+        Nx, Ny, Nz : int
+            Grid cells along each axis.
+        Zeus21 and oLIMpus outputs
+            Coefficients and Power Spectra for 21cm and LIM
+        seed : int
+            Random seed.
+        dtype : numpy dtype
+            Output field precision.
+
+        Returns
+        -------
+        rho : ndarray
+            Lognormal field of shape (Nx,Ny,Nz).
+        """
+
+        self.seed = seed
+        rng = np.random.default_rng(seed)
+        rng_nl = np.random.default_rng(seed+1)
+        rng_shot = np.random.default_rng(seed+2)
+
+        self.Nx = Nx
+        self.Ny = Ny
+        self.Nz = Nz
+
+        dx = Lx / Nx
+        dy = Ly / Ny
+        dz = Lz / Nz
+
+        self.dx = dx
+        self.dy = dy
+        self.dz = dz
+
+        if (dx != dy) or (dx != dz) or (dy != dz):
+            print('Box with asymmetric resolution.')
+            print('Nyquist scales should be similar; they are:')
+            kNy_x = np.pi/dx
+            kNy_y = np.pi/dy
+            kNy_z = np.pi/dz
+            print('kNy_x = ' + str(round(kNy_x,2)) + ', kNy_y = ' + str(round(kNy_x,2)) + ', kNy_z = ' + str(round(kNy_z,2)))
+
+        V = Lx * Ly * Lz
+        self.V = V 
+
+        # Fourier frequencies
+        kx = 2*np.pi*np.fft.fftfreq(Nx, d=dx)
+        ky = 2*np.pi*np.fft.fftfreq(Ny, d=dy)
+        kz = 2*np.pi*np.fft.rfftfreq(Nz, d=dz)
+
+        self.kx = kx
+        self.ky = ky
+        self.kz = kz
+
+        # allocate Fourier field (half-complex storage)
+        delta_k_LIM_noiseless = np.zeros((Nx, Ny, Nz//2 + 1), dtype=np.complex64)
+        delta_k_LIM_shotnoise = np.zeros((Nx, Ny, Nz//2 + 1), dtype=np.complex64)
+
+        # first let us produce the LIM box
+        zlist = LIM_coeff.zintegral 
+        _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
+        self.z = zlist[_iz]
+        self.Inu_bar = LIM_coeff.Inu_bar[_iz]
+        klist = LIM_Power_Spectrum.klist_PS
+
+        if RSD == 0:
+            Pnu = LIM_Power_Spectrum._Pk_LIM[_iz,:] / self.Inu_bar**2
+        else:
+            Pnu = LIM_Power_Spectrum._Pk_LIM_RSD[_iz,:] / self.Inu_bar**2
+
+        Pnu_interp = interp1d(klist,Pnu,fill_value=0.0,bounds_error=False)
+
+        kxg, kyg, kzg = np.meshgrid(kx,ky,kz,indexing="ij")
+        k = np.sqrt(kxg**2 + kyg**2 + kzg**2)
+
+        # Evaluate input power spectrum
+        P_ln = Pnu_interp(k)
+
+        if (dx != dy) or (dx != dz) or (dy != dz):
+            k_cut = 0.8 * min(kNy_x, kNy_y, kNy_z)
+            P_ln[k > k_cut] = 0
+            print('To avoid generating modes near the Nyquist frequency I am bandlimiting the power spectrum setting to zeros modes k > kcut = ' + str(round(k_cut,2)))
+
+        # correction to produce lognormal box 
+        self.Ntot = Nx*Ny*Nz
+
+        # xi_ln = np.fft.irfftn(P_ln, s=(Nx,Ny,Nz)) #* (self.Ntot / V) / 2.0
+        # xi_g = np.log(1.0 + xi_ln)
+        # P_g = np.fft.rfftn(xi_g, s=(Nx,Ny,Nz)).real 
+        # P_g[P_g < 0] = 0
+
+        # # draw Gaussian modes with the correct shape
+        # a = rng.normal(size=(Nx, Ny, Nz//2 + 1))
+        # b = rng.normal(size=(Nx, Ny, Nz//2 + 1))
+
+        # delta_k_LIM_noiseless = np.sqrt(P_g * V / 2.0) * (a + 1j*b)
+        # delta_k_LIM_noiseless[0,0,0] = 0 # remove DC mode
+        
+        # # transform to real space
+        # g  = np.fft.irfftn(delta_k_LIM_noiseless, s=(Nx, Ny, Nz))
+
+        # # --- Step 6: lognormal field
+        # self.Inu_box_noiseless  = np.exp(g-np.var(g)/2) * self.Inu_bar
+
+
+        # Step 1: correlation function of the GAUSSIAN underlying field
+        # Use full fftn to avoid half-plane issues
+        kx_f = 2*np.pi*np.fft.fftfreq(Nx, d=dx)
+        ky_f = 2*np.pi*np.fft.fftfreq(Ny, d=dy)
+        kz_f = 2*np.pi*np.fft.fftfreq(Nz, d=dz)
+        kxg_f, kyg_f, kzg_f = np.meshgrid(kx_f, ky_f, kz_f, indexing="ij")
+        k_full = np.sqrt(kxg_f**2 + kyg_f**2 + kzg_f**2)
+        P_ln_full = Pnu_interp(k_full)   # full 3D grid, not half-plane
+        P_ln_full[0,0,0] = 0
+
+        # Step 2: xi_ln via fftn (no half-plane ambiguity)
+        xi_ln = np.fft.ifftn(P_ln_full).real * (self.Ntot / V)
+
+        # Step 3: lognormal correction entirely in real space
+        xi_g  = np.log(1.0 + xi_ln)
+
+        # Step 4: back to k-space with fftn (full grid)
+        P_g_full = np.fft.fftn(xi_g).real * (V / self.Ntot)
+        P_g_full[P_g_full < 0] = 0
+
+        # Step 5: draw modes on full grid
+        # Take the rfft slice of P_g_full
+        P_g_half = P_g_full[:, :, :Nz//2+1]
+
+        a = rng.normal(size=(Nx, Ny, Nz//2+1))
+        b = rng.normal(size=(Nx, Ny, Nz//2+1))
+        delta_k = np.sqrt(P_g_half * self.Ntot**2 / (2.0 * V)) * (a + 1j*b)
+        delta_k[0,0,0] = 0
+        g = np.fft.irfftn(delta_k, s=(Nx,Ny,Nz))
+
+        self.Inu_box_noiseless = np.exp(g - np.var(g)/2) * self.Inu_bar
+
+        # shot noise
+        if Line_Parameters.shot_noise:
+
+            Pshot_interp = LIM_coeff.shot_noise[_iz]
+
+            a = rng_shot.normal(size=(Nx, Ny, Nz//2+1))
+            b = rng_shot.normal(size=(Nx, Ny, Nz//2+1))
+            delta_k_LIM_shotnoise = np.sqrt(Pshot_interp * self.Ntot**2 / (2.0 * V)) * (a + 1j*b)
+            delta_k_LIM_shotnoise[0,0,0] = 0
+            self.shotnoise_box = np.fft.irfftn(delta_k_LIM_shotnoise, s=(Nx,Ny,Nz))
+            self.shotnoise_box += LIM_coeff.shot_noise[_iz]
+
+            # # draw Gaussian modes
+            # a = rng_shot.normal(size=(Nx, Ny, Nz//2 + 1))
+            # b = rng_shot.normal(size=(Nx, Ny, Nz//2 + 1))
+            # delta_k_LIM_shotnoise = np.sqrt(Pshot_interp*V/2) * (a + 1j*b)
+
+            # delta_k_LIM_shotnoise[0,0,0] = 0
+
+            # # inverse FFT → real-space Gaussian field
+            # self.shotnoise_box = np.fft.irfftn(delta_k_LIM_shotnoise, s=(Nx,Ny,Nz)).astype(dtype)
+            # # add mean
+            # self.shotnoise_box += LIM_coeff.shot_noise[_iz]
+
+        else:
+            self.shotnoise_box = np.zeros_like(self.Inu_box_noiseless)
+
+        # LIM box with shot noise
+        self.Inu_box = self.Inu_box_noiseless + self.shotnoise_box
+
+        # ---------------------------------------------- #
+        # now the xH box 
+        # ---------------------------------------------- #
+
+        BMF_val = BMF(T21_coefficients, HMF_interpolator, Cosmo_Parameters, Astro_Parameters, ClassyCosmo, R_linear_sigma_fit_input=10, FLAG_converge=True, max_iter=10, ZMAX_REION = 30,Rmin=0.05)
+
+        self.r_precision = 1.
+        self.dx21 = max(dx,dy,dz) # !!!!!!!!!!!!!!!!!!!!!!!!!
+        self.boxlength21 = min(Lx, Ly, Lz) # !!!!!!!!!!!!!!!!!!!!!!!!!
+        default_len = len(T21_coefficients.Rtabsmoo)
+        self.z_21 = np.atleast_1d(z) 
+        self._z21_idx = np.arange(len(np.atleast_1d(z))) #z21_utilities.find_nearest_idx(CoeffStructure.zintegral, self.input_z)
+        self.z_of_density = self.z_21[0]
+
+        self.r = np.logspace(np.log10(self.dx21 * (3/4/np.pi)**(1/3))/ T21_coefficients.Rtabsmoo[0], np.log10(self.boxlength21), int(default_len*self.r_precision))
+        self._r_idx = np.arange(int(default_len*self.r_precision))
+
+        self.density = self.generate_density(ClassyCosmo, T21_corr)
+        self.density_allz = np.empty((len(self.z_21), self.Nx, self.Ny, self.Nz), dtype=np.float32)
+        self.generate_density_allz(Cosmo_Parameters)
+        self._k21 = self.compute_k() 
+        self.density_smoothed_allr = self.smooth_density()
+
+        self.barrier = np.array([BMF_val.B(z, self.r) for z in self.z_21]) #BMF linear barrier
+
+        self.ion_field_allz, self.ion_frac_full = self.generate_xHII(Cosmo_Parameters)
+
+        self.compute_partial(BMF_val)
+        if massweighted_reio:
+
+            self.compute_partial_massweighted(Cosmo_Parameters,BMF_val,r=None)
+
+            reionization_map_partial = self.ion_field_partial_massweighted_allz
+            ion_frac_withpartial = self.ion_frac_partial_massweighted
+
+        else:            
+            reionization_map_partial = self.ion_field_partial_allz
+            ion_frac_withpartial = self.ion_frac_partial
+
+        self.ion_frac = ion_frac_withpartial
+        self.xH_avg_map = 1. - self.ion_frac
+            
+        self.xHI_box = reionization_map_partial[0]
+        self.xH_box = 1. - reionization_map_partial[0]
+        self.xH_box[np.isnan(self.xH_box)] = 0.
+
+        # ---------------------------------------------- #
+        # now the 21cm box 
+        # ---------------------------------------------- #
+
+        zlist = T21_coefficients.zintegral 
+        _iz21 = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
+
+        self.T21global_noR = T21_coefficients.T21avg_noR[_iz21] 
+
+        klist21 = Power_Spectrum.klist_PS
+        k3over2pi2 = klist21**3/(2*np.pi**2)
+
+        Dsq_T21_lin = Power_Spectrum.Deltasq_T21_lin_noR[_iz21] 
+
+        Dsq_dT21 = Power_Spectrum.Deltasq_dT21[_iz21]
+
+        Dsq_T21 = Power_Spectrum.Deltasq_T21_noR[_iz21]
+
+        Pd21_analytical = Power_Spectrum.Deltasq_d_lin[_iz21,:]/k3over2pi2
+        Pd21_spl = interp1d(np.log(klist21),
+                    np.log(Pd21_analytical),
+                    bounds_error=False,
+                    fill_value=0.0)
+        
+        a = rng.normal(size=(self.Nx, self.Ny, self.Nz//2 + 1))
+        b = rng.normal(size=(self.Nx, self.Ny, self.Nz//2 + 1))
+
+        Pd21 = Pd21_spl(np.log(k))
+        
+        delta_k_dens_forT21 = np.sqrt(np.exp(Pd21) * self.Ntot**2 / (2.0 * V)) * (a + 1j*b)
+        delta_k_dens_forT21[0,0,0] = 0
+
+        PdT21 = Dsq_dT21/k3over2pi2
+        powerratio_spl = spline(klist, PdT21/Pd21_analytical)
+                            
+        powerratio = powerratio_spl(k)
+        T21lin_k = powerratio * delta_k_dens_forT21
+        self.T21maplin= self.T21global_noR + np.fft.irfftn(T21lin_k, s=(self.Nx,self.Ny,self.Nz)).astype( dtype=np.float32)
+        
+        excesspower21 = (Dsq_T21-Dsq_T21_lin)/k3over2pi2
+
+        lognormpower = interp1d(klist21,excesspower21/self.T21global_noR**2,fill_value=0.0,bounds_error=False)
+
+        # Evaluate input power spectrum
+        P_ln21 = lognormpower(k)
+
+        if (dx != dy) or (dx != dz) or (dy != dz):
+            P_ln21[k > k_cut] = 0
+
+        xi_ln21 = np.fft.ifftn(P_ln21).real * (self.Ntot / V)
+
+        # Step 3: lognormal correction entirely in real space
+        xi_g21  = np.log(1.0 + xi_ln21)
+
+        # Step 4: back to k-space with fftn (full grid)
+        P_21_full = np.fft.fftn(xi_g21).real * (V / self.Ntot)
+        P_21_full[P_21_full < 0] = 0
+
+        # Step 5: draw modes on full grid
+        # Take the rfft slice of P_g_full
+        P_21_half = P_21_full[:, :, :Nz//2+1]
+
+        a21 = rng_nl.normal(size=(Nx, Ny, Nz//2+1))
+        b21 = rng_nl.normal(size=(Nx, Ny, Nz//2+1))
+        delta_k_21 = np.sqrt(P_21_half * self.Ntot**2 / (2.0 * V)) * (a21 + 1j*b21)
+        delta_k_21[0,0,0] = 0
+        g21 = np.fft.irfftn(delta_k_21, s=(Nx,Ny,Nz))
+
+        delta_T21  = np.exp(g21) - 1.
+        
+        self.T21mapNL = self.T21global_noR * delta_T21 
+
+        #and finally, just add them together!
+        self.T21_map_only =  self.T21maplin + self.T21mapNL  
+
+        self.T21_map = self.T21_map_only * self.xH_box
+
+    # ---------------------------------------------- #
+    # required functions 
+    # ---------------------------------------------- #
+
+    def generate_xHII(self, CosmoParams):
+
+        ion_field_allz = np.zeros((len(self.z_21),self.Nx,self.Ny,self.Nz))
+        ion_frac = np.zeros(len(self.z_21))
+
+        iterator = range(len(self.z_21))
+        
+        for i in iterator:
+            curr_z_idx = self._z21_idx[i]
+            ion_field = self.ionize(CosmoParams, curr_z_idx)
+            ion_field_allz[i] = ion_field
+            ion_frac[i] = np.sum(ion_field)/(self.Nx * self.Ny * self.Nz)
+
+        return ion_field_allz, ion_frac
+
+    def ionize(self, CosmoParams, curr_z_idx):
+        zlist = self.z_21 
+        
+        Dg0 = CosmoParams.growthint(zlist[0])
+        Dg = CosmoParams.growthint(zlist[curr_z_idx])
+
+        ion_field = np.any(self.density_smoothed_allr > (Dg0/Dg)*self.barrier[curr_z_idx, self._r_idx][:, None, None, None], axis=0)
+
+        return ion_field
+
+    def generate_density(self, ClassyCosmo, CorrFClass):
+
+        #Generating matter power spectrum at the lowest redshift
+        klist = CorrFClass._klistCF
+        pk_matter = np.zeros_like(klist)
+        for i, k in enumerate(klist):
+            pk_matter[i] = ClassyCosmo.pk(k, self.z_of_density)
+        pk_spl = spline(np.log(klist), np.log(pk_matter))
+    
+        #generating density map
+        # draw Gaussian modes
+        rng = np.random.default_rng(self.seed)
+
+        a = rng.normal(size=(self.Nx, self.Ny, self.Nz//2 + 1))
+        b = rng.normal(size=(self.Nx, self.Ny, self.Nz//2 + 1))
+
+        kxg, kyg, kzg = np.meshgrid(self.kx,self.ky,self.kz,indexing="ij")
+        k = np.sqrt(kxg**2 + kyg**2 + kzg**2)
+
+        P = pk_spl(np.log(k))
+        
+        # delta_k_density = np.sqrt(np.exp(P)*self.V/2) * (a + 1j*b)
+        delta_k_density = np.sqrt(np.exp(P) * self.Ntot**2 / (2.0 * self.V)) * (a + 1j*b)
+        delta_k_density[0,0,0] = 0
+
+        # inverse FFT → real-space Gaussian field
+        density_field = np.fft.irfftn(delta_k_density, s=(self.Nx,self.Ny,self.Nz)).astype( dtype=np.float32)
+
+        return density_field
+
+
+    def generate_density_allz(self, CosmoParams):
+
+        Dg = CosmoParams.growthint(self.z_21)
+        growthfactor_ratio = (Dg/Dg[0])[:, np.newaxis, np.newaxis, np.newaxis]
+        density_lastz = np.copy(self.density)
+        self.density_allz = density_lastz[np.newaxis]*growthfactor_ratio
+
+        return self.density_allz
+
+    def compute_k(self):
+        kx = np.fft.fftfreq(self.Nx, self.dx) * 2*np.pi
+        ky = np.fft.fftfreq(self.Ny, self.dy) * 2*np.pi
+        kz = np.fft.fftfreq(self.Nz, self.dz) * 2*np.pi
+        kxg, kyg, kzg = np.meshgrid(kx, ky, kz, indexing='ij')
+        k = np.sqrt(kxg**2 + kyg**2 + kzg**2)
+        return k
+
+    def smooth_density(self):
+
+        density_fft = np.fft.fftn(self.density)
+        density_smoothed_allr = np.array([z21_utilities.tophat_smooth(rr, self._k21, density_fft) for rr in self.r])
+
+        return density_smoothed_allr
+
+    def compute_partial(self, BMF, r=None):
+        
+        if r is None:
+            r = self.r[0]
+
+        self.ion_frac_partial = np.empty(len(self.z_21))
+        self.ion_field_partial_allz = np.empty_like(self.ion_field_allz)
+
+        sample_d = np.linspace(-5, 5, 51)
+
+        iterator = range(len(self.z_21))
+        for i in iterator:
+            partial_ion_spl = spline(sample_d, BMF.prebarrier_xHII_int_grid(sample_d, self.z_21[i], r)) #spline is faster than RGI, so build a spline on sample densities
+            
+            partialfield = np.abs(partial_ion_spl(self.density_allz[i]))
+            sumfield = self.ion_field_allz[i] + partialfield
+            self.ion_field_partial_allz[i] = np.clip(sumfield, 0, 1)
+
+        self.ion_frac_partial = np.average(self.ion_field_partial_allz, axis=(1, 2, 3))
+            
+        return self.ion_frac_partial, self.ion_field_partial_allz
+    
+    def compute_partial_massweighted(self, CosmoParams, BMF, r=None):
+
+        self.ion_frac_partial_massweighted = np.empty(len(self.z_21))
+        self.ion_field_partial_massweighted_allz = np.empty_like(self.ion_field_allz)
+
+        iterator = range(len(self.z_21))
+        for i in iterator:
+            self.ion_field_partial_massweighted_allz[i] = (1+self.density_allz[i]) * self.ion_field_partial_allz[i]
+        
+
+        iterator = range(len(self.z_21))
+        for i in iterator:
+            self.ion_frac_partial_massweighted[i] = np.average(self.ion_field_partial_massweighted_allz[i])
+        
+        return self.ion_frac_partial_massweighted, self.ion_field_partial_massweighted_allz
+
+

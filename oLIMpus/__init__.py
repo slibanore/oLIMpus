@@ -1,4 +1,5 @@
 
+print('oLIMpus version March 18, 2026')
 from .zeus21_local import * 
 from .inputs_LIM import * 
 from .LIM_luminosities import * 

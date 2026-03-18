@@ -130,9 +130,33 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
             line_dict = None
         )
 
+    elif model == 'OII':
+        LP_input = a.LineParams_Input(
+            LINE = 'OII', # which line
+            LINE_MODEL = 'Yang24', # model of the line luminosity
+            OBSERVABLE_LIM = 'Inu', # observe intensity in Jy/sr or mK
+            _R = 1. if _R == None else _R, # resolution for smoothing
+            sigma_LMh = 0., # stochasticity in the L-SFR relation
+            shot_noise = with_shotnoise, # add shot noise to the power spectrum
+            quadratic_lognormal = True, # use 1st or 2nd order in the SFRD and line lognormal approximation MOVE TO USER PARAMS
+            line_dict = None
+        )
+
     elif model == 'Ha':
         LP_input = a.LineParams_Input(
             LINE = 'Ha', # which line
+            LINE_MODEL = 'Yang24', # model of the line luminosity
+            OBSERVABLE_LIM = 'Inu', # observe intensity in Jy/sr or mK
+            _R =  1. if _R == None else _R, # resolution for smoothing
+            sigma_LMh = 0., # stochasticity in the L-SFR relation
+            shot_noise = with_shotnoise, # add shot noise to the power spectrum
+            quadratic_lognormal = True, # use 1st or 2nd order in the SFRD and line lognormal approximation MOVE TO USER PARAMS
+            line_dict = None
+        )
+
+    elif model == 'Hb':
+        LP_input = a.LineParams_Input(
+            LINE = 'Hb', # which line
             LINE_MODEL = 'Yang24', # model of the line luminosity
             OBSERVABLE_LIM = 'Inu', # observe intensity in Jy/sr or mK
             _R =  1. if _R == None else _R, # resolution for smoothing
@@ -205,6 +229,9 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
     pk_auto_21 = [] 
     use_pk_auto_line = []
 
+    T21_corr = []
+    nu_corr = []
+
     k_bins = np.logspace(np.log10(2*np.pi/Lbox),np.log10(2*np.pi/Lbox*Nbox),10) # k array 
 
     for i in tqdm(range(len(par_vals))):
@@ -225,6 +252,8 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
         pk_cross.append([]) 
         pk_auto_21.append([]) 
         use_pk_auto_line.append([])
+        T21_corr.append([]) 
+        nu_corr.append([])
 
         if save_maps and not os.path.exists(path+  'maps_L' + str(Lbox) +'_N' + str(Nbox) +  '/'):
             os.makedirs(path +  'maps_L' + str(Lbox) +'_N' + str(Nbox) +  '/')
@@ -307,6 +336,8 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
             pk_cross[i].append(temp_v[2]) 
             pk_auto_21[i].append(temp_v[3]) 
             use_pk_auto_line[i].append(temp_v[4])
+            T21_corr[i].append(auto_corr(box_T21.T21_map))
+            nu_corr[i].append(auto_corr(box_line))
 
     # Save inputs and outputs to file
     data_to_save = {
@@ -323,7 +354,9 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
             'k_cross': k_cross,
             'pk_cross': pk_cross,
             'pk_auto_21': pk_auto_21,
-            'use_pk_auto_line': use_pk_auto_line
+            'use_pk_auto_line': use_pk_auto_line,
+            'T21_corr':T21_corr,
+            'nu_corr':nu_corr
         }
     }
 
@@ -434,3 +467,8 @@ def r_cross(box_LIM, box_T21, Lbox, k_bins, foregrounds):
     return r, k_cross, use_pk_cross, use_pk_auto_21, use_pk_auto_line
 
 
+def auto_corr(box):
+
+    ac = np.var(box)
+
+    return ac
