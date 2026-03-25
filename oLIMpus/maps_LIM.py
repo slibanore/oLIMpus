@@ -91,40 +91,17 @@ class CoevalBox_LIM_analytical:
             Pnu = LIM_Power_Spectrum._Pk_LIM_RSD[_iz,:]
 
         Pnu_interp = interp1d(klist,Pnu,fill_value=0.0,bounds_error=False)
-        if Line_Parameters.LINE_MODEL == 'powerlaw':
 
-            pb = pbox.LogNormalPowerBox(
-                N=self.Nbox,                     
-                dim= 3,                     
-                pk = lambda k: Pnu_interp(k)*1e10, 
-                boxlength = self.Lbox,           
-                seed = self.seed,
-            )
-            self.Inu_box_noiseless = pb.delta_x()/1e5 + self.Inu_bar
+        norm = Pnu_interp(0.1)
 
-            if np.all(np.isnan(self.Inu_box_noiseless)):
-                pb = pbox.LogNormalPowerBox(
-                    N=self.Nbox,                     
-                    dim= 3,                     
-                    pk = lambda k: Pnu_interp(k), 
-                    boxlength = self.Lbox,           
-                    seed = self.seed,
-                )
-                self.Inu_box_noiseless = pb.delta_x() + self.Inu_bar
-
-
-        else:
-            # produce Gaussian box with boosted power spectrum
-            pb = pbox.LogNormalPowerBox(
-                N=self.Nbox,                     
-                dim= 3,                     
-                pk = lambda k: Pnu_interp(k), 
-                boxlength = self.Lbox,           
-                seed = self.seed,
-            )
-            self.Inu_box_noiseless = pb.delta_x() + self.Inu_bar
-
-        print("\nFor reference, np.mean(pb.delta_x()**2) =", np.mean(pb.delta_x()**2))
+        pb = pbox.LogNormalPowerBox(
+            N=self.Nbox,                     
+            dim= 3,                     
+            pk = lambda k: Pnu_interp(k)/norm, 
+            boxlength = self.Lbox,           
+            seed = self.seed,
+        )
+        self.Inu_box_noiseless = pb.delta_x()*np.sqrt(norm) + self.Inu_bar
 
         # create shot noise box
         if Line_Parameters.shot_noise:
