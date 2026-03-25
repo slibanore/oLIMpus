@@ -314,9 +314,9 @@ def run_and_save_model(model,which_par,par_vals,Lbox,with_shotnoise=True,Nbox=No
                             box_T21.T21_map[x][np.isnan(box_T21.T21_map[x])] = 0.
                             row_str = " ".join(f"{val:.6e}" for val in box_line[0][x])
                             f_line.write(f"{use_zvals[zv]:.3f} {row_str}\n")
-                            row_str = " ".join(f"{val:.6e}" for val in box_T21.xH_box[x])
+                            row_str = " ".join(f"{val:.6e}" for val in box_T21.xH_box[0][x])
                             f_xH.write(f"{use_zvals[zv]:.3f} {row_str}\n")
-                            row_str = " ".join(f"{val:.6e}" for val in box_T21.T21_map[x])
+                            row_str = " ".join(f"{val:.6e}" for val in box_T21.T21_map[0][x])
                             f_21.write(f"{use_zvals[zv]:.3f} {row_str}\n")
                             #row_str = " ".join(f"{val:.6e}" for val in box_Pearson[x])
                             #f_P.write(f"{use_zvals[zv]:.3f} {row_str}\n")
