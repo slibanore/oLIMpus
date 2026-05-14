@@ -780,25 +780,6 @@ class generate_asym_boxes:
         # correction to produce lognormal box 
         self.Ntot = Nx*Ny*Nz
 
-        # xi_ln = np.fft.irfftn(P_ln, s=(Nx,Ny,Nz)) #* (self.Ntot / V) / 2.0
-        # xi_g = np.log(1.0 + xi_ln)
-        # P_g = np.fft.rfftn(xi_g, s=(Nx,Ny,Nz)).real 
-        # P_g[P_g < 0] = 0
-
-        # # draw Gaussian modes with the correct shape
-        # a = rng.normal(size=(Nx, Ny, Nz//2 + 1))
-        # b = rng.normal(size=(Nx, Ny, Nz//2 + 1))
-
-        # delta_k_LIM_noiseless = np.sqrt(P_g * V / 2.0) * (a + 1j*b)
-        # delta_k_LIM_noiseless[0,0,0] = 0 # remove DC mode
-        
-        # # transform to real space
-        # g  = np.fft.irfftn(delta_k_LIM_noiseless, s=(Nx, Ny, Nz))
-
-        # # --- Step 6: lognormal field
-        # self.Inu_box_noiseless  = np.exp(g-np.var(g)/2) * self.Inu_bar
-
-
         # Step 1: correlation function of the GAUSSIAN underlying field
         # Use full fftn to avoid half-plane issues
         kx_f = 2*np.pi*np.fft.fftfreq(Nx, d=dx)
@@ -842,18 +823,6 @@ class generate_asym_boxes:
             delta_k_LIM_shotnoise[0,0,0] = 0
             self.shotnoise_box = np.fft.irfftn(delta_k_LIM_shotnoise, s=(Nx,Ny,Nz))
             self.shotnoise_box += LIM_coeff.shot_noise[_iz]
-
-            # # draw Gaussian modes
-            # a = rng_shot.normal(size=(Nx, Ny, Nz//2 + 1))
-            # b = rng_shot.normal(size=(Nx, Ny, Nz//2 + 1))
-            # delta_k_LIM_shotnoise = np.sqrt(Pshot_interp*V/2) * (a + 1j*b)
-
-            # delta_k_LIM_shotnoise[0,0,0] = 0
-
-            # # inverse FFT → real-space Gaussian field
-            # self.shotnoise_box = np.fft.irfftn(delta_k_LIM_shotnoise, s=(Nx,Ny,Nz)).astype(dtype)
-            # # add mean
-            # self.shotnoise_box += LIM_coeff.shot_noise[_iz]
 
         else:
             self.shotnoise_box = np.zeros_like(self.Inu_box_noiseless)
