@@ -1,18 +1,12 @@
 #!/bin/bash
-
-# Create a new Conda environment named 'myenv' with Python 3.10
 conda deactivate
 conda env remove --name oLIMpus --all -y
-conda create --name oLIMpus python=3.10
+conda create --name oLIMpus python=3.10 -y
 
-# Activate the environment
+source $(conda info --base)/etc/profile.d/conda.sh
 conda activate oLIMpus
 
-# Install required Python packages
-conda install cython 
-conda install ipykernel 
-conda install pygments 
-conda install pexpect 
-pip install .
+conda install -y cython ipykernel pygments pexpect
+pip install --upgrade .
 
 echo "Conda environment 'oLIMpus' is set up and packages are installed."
