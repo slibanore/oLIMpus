@@ -75,7 +75,7 @@ class Line_Parameters:
     stoch_type: str = "median"
     sigma_LMh: float = 0.
 
-    line_dict: dict = _field(init=False)    
+    line_dict: dict = None   
 
     def __post_init__(self):
         schema = {
@@ -83,7 +83,7 @@ class Line_Parameters:
             "OBSERVABLE_LIM": (str, {"Inu", "Tnu"}),
             "shot_noise": (bool, None),
             "quadratic_rhoL": (bool, None),
-            "stoch_type": (str, "mean", "median"),
+            "stoch_type": (str, {"mean", "median"}),
         }
         inputs.validate_fields(self, schema)
         
