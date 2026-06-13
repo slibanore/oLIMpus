@@ -5,10 +5,10 @@ from setuptools import setup, find_packages
 # SarahLibanore: install oLIMpus and zeus21
 setup(
     name='oLIMpus',
-          version='0.1dev',
+          version='2.0',
           description='oLIMpus: cross-correlating lines with Zeus21.',
           url='https://github.com/slibanore/Zeus21',
-          author='Sarah Libanore, Julian B. Muñoz, Yonatan Sklansky, Hector Afonso G. Cruz',
+          author='Sarah Libanore',
           author_email='libanore@bgu.ac.il',
           license='MIT',
           packages=find_packages(),
