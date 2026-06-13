@@ -5,7 +5,7 @@ Author: Sarah Libanore
 BGU - April 2025
 '''
 from oLIMpus.inputs_LIM import *
-from oLIMpus import LIM_luminosities as L
+from oLIMpus import luminosities_LIM as L
 
 # Define the coefficients to be used in the LIM auto spectra computation; zmin is down to which the computation is performed
 class get_LIM_coefficients:

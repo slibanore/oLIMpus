@@ -14,12 +14,14 @@ def powerlaw(line, dotM, line_dict):
 ### UV AND OPTICAL 
 ########################################################
 
-# from arXiv:2409.03997
+# from arXiv:2409.03997, Eq. 16
 def Yang24(line, dotM, line_dict):
 
     if line_dict is None:
         if line == 'OIII4960':
             line_dict = Yang24_OIII4960_params
+        elif line == 'OIII4364':
+            line_dict = Yang24_OIII4364_params
         elif line == 'OIII5007' or 'OIII':
             line_dict = Yang24_OIII5007_params
         elif line == 'OII':
@@ -44,7 +46,7 @@ def Yang24(line, dotM, line_dict):
     return log10_L
 
 
-# from arXiv:2111.02411
+# from arXiv:2111.02411, Eq. 1
 def THESAN21(line, dotM, line_dict):
 
     if line_dict is None:
@@ -63,8 +65,8 @@ def THESAN21(line, dotM, line_dict):
     a = line_dict['a']
     ma = line_dict['ma']
     mb = line_dict['mb']
-    log10_SFR_b = line_dict['log10_SFR_b']
     mc = line_dict['mc']
+    log10_SFR_b = line_dict['log10_SFR_b']
     log10_SFR_c = line_dict['log10_SFR_c']
 
     log10_SFR = np.log10(dotM)
@@ -82,10 +84,10 @@ def THESAN21(line, dotM, line_dict):
     return log10_L
 
 ########################################################
-### INFRARED CII
+### INFRARED 
 ########################################################
 
-# from arXiv:1711.00798
+# from arXiv:1711.00798, Eq. 10 anchored at z=10
 def Lagache18(line, dotM, z, line_dict):
 
     if line != 'CII':
@@ -105,16 +107,16 @@ def Lagache18(line, dotM, z, line_dict):
         if alpha_SFR < 0.:
             alpha_SFR = 0.
 
-    log10_L = alpha_SFR * np.log10(dotM) + beta_SFR     
+    log10_L = alpha_SFR * np.log10(dotM) + beta_SFR 
 
     return log10_L
 
 
 ########################################################
-### SUB-MM CO
+### SUB-MM 
 ########################################################
 
-# from arXiv:2108.07716
+# from arXiv:2108.07716, tab 1
 def Yang21(line, massVector, z, line_dict):
 
     YangEmp_f2 = lambda x1, x2, x3, zz: x1 + x2*z + x3*zz**2
@@ -149,6 +151,9 @@ def Yang21(line, massVector, z, line_dict):
                             YangEmp_f1(38.3, 0.841, 0.169, z)))# !!! note that this above 8.5 is not correct
         
     elif line == 'CO10':
+        if line_dict is None:
+            line_dict = Yang21_CO10_params
+
         logM1 = np.where(z < 4.0,
                         YangEmp_f2(12.13, -0.1678, 0, z),
                         np.where(z < 5.0,
@@ -194,6 +199,8 @@ def Li16(line, dotM, line_dict):
     if line_dict is None:
         if line == 'CO21':
             line_dict = Li16_C021_params
+        elif line == 'CO10':
+            line_dict = Li16_C021_params
         else:
             print('\nLINE NOT IMPLEMENTED YET IN LI16')
             return -1
@@ -205,16 +212,21 @@ def Li16(line, dotM, line_dict):
 
     log10_SFR = np.log10(dotM)
 
+    # Eq. 1 
     L_IR = 10**log10_SFR / (dMF*1e-10)
+
+    # Eq. 2
     Lprime = (10.**-beta * L_IR)**(1./alpha)
 
     if line == 'CO21': # 2-1 transition
         lambda_line = 1.3e7*u.AA 
-    elif line == 'CO10': # 2-1 transition
+    elif line == 'CO10': # 1-0 transition
         lambda_line = 2.6e7*u.AA 
-    nu_rest = (cu.c / (lambda_line)).to(u.GHz) # rest frame frequency in Hz 
-    scale_nu = nu_rest/(115*u.GHz)
 
-    log10_L = np.log10(L0*Lprime*scale_nu**3)
+    nu_rest = (cu.c / (lambda_line)).to(u.GHz) # rest frame frequency in Hz 
+    scale_nu = nu_rest / (115.27*u.GHz)
+
+    # Eq. 4 
+    log10_L = np.log10(L0 * Lprime * scale_nu**3)
 
     return log10_L

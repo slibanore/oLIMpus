@@ -2,8 +2,8 @@
 print('oLIMpus_v2 version June 13, 2026')
 from zeus21 import * 
 from .inputs_LIM import * 
-from .LIM_luminosities import * 
-from .LIM_modeling import * 
+from .luminosities_LIM import * 
+from .modeling_LIM import * 
 from .correlations_LIM import * 
 from .maps_LIM import * 
 
