@@ -22,5 +22,6 @@ setup(
            "powerbox",
            "tqdm",
            "matplotlib",
+            "zeus21 @ git+https://github.com/ZeusCosmo/Zeus21.git@zeus21_hack",
        ],
 )
