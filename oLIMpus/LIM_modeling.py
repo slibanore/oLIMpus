@@ -4,15 +4,8 @@ Model luminosity density and observed intensity for star forming lines.
 Author: Sarah Libanore
 BGU - April 2025
 '''
-from oLIMpus import constants
-from oLIMpus import cosmology
-from oLIMpus import sfrd, inputs_LIM
+from oLIMpus.inputs_LIM import *
 from oLIMpus import LIM_luminosities as L
-import numpy as np 
-import astropy.units as u 
-import astropy.constants as cu 
-from scipy.integrate import simpson
-from scipy.stats import lognorm
 
 # Define the coefficients to be used in the LIM auto spectra computation; zmin is down to which the computation is performed
 class get_LIM_coefficients:
@@ -53,7 +46,7 @@ class get_LIM_coefficients:
 
         if Line_Parameters.stoch_type == 'mean' and Line_Parameters.LINE_MODEL == 'Li16':
             if Line_Parameters.line_dict is None:
-                line_dict = inputs_LIM.Li16_C021_params
+                line_dict = Li16_C021_params
             else:
                 line_dict = Line_Parameters.line_dict
 
@@ -233,7 +226,7 @@ def P_shot_noise_integrand(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parame
 
         if Line_Parameters.LINE_MODEL == 'Li16':
             if Line_Parameters.line_dict is None:
-                line_dict = inputs_LIM.Li16_C021_params
+                line_dict = Li16_C021_params
             else:
                 line_dict = Line_Parameters.line_dict
 
@@ -283,7 +276,7 @@ def LineLuminosity(dotM, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HM
 
         if Line_Parameters.LINE_MODEL == 'Li16':
             if Line_Parameters.line_dict is None:
-                line_dict = inputs_LIM.Li16_C021_params
+                line_dict = Li16_C021_params
             else:
                 line_dict = Line_Parameters.line_dict
 

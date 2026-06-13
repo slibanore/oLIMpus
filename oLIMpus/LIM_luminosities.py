@@ -1,5 +1,4 @@
-import numpy as np 
-from oLIMpus import inputs_LIM
+from oLIMpus.inputs_LIM import * 
 
 # scale SFR
 def powerlaw(line, dotM, line_dict):
@@ -20,15 +19,15 @@ def Yang24(line, dotM, line_dict):
 
     if line_dict is None:
         if line == 'OIII4960':
-            line_dict = inputs_LIM.Yang24_OIII4960_params
+            line_dict = Yang24_OIII4960_params
         elif line == 'OIII5007' or 'OIII':
-            line_dict = inputs_LIM.Yang24_OIII5007_params
+            line_dict = Yang24_OIII5007_params
         elif line == 'OII':
-            line_dict = inputs_LIM.Yang24_OII_params
+            line_dict = Yang24_OII_params
         elif line== 'Ha':
-            line_dict = inputs_LIM.Yang24_Ha_params
+            line_dict = Yang24_Ha_params
         elif line == 'Hb':
-            line_dict = inputs_LIM.Yang24_Hb_params
+            line_dict = Yang24_Hb_params
         else:
             print('\nLINE NOT IMPLEMENTED YET IN YANG24')
             return -1
@@ -50,13 +49,13 @@ def THESAN21(line, dotM, line_dict):
 
     if line_dict is None:
         if line == 'OIII' or line == 'OIII4960' or line == 'OIII5007':
-            line_dict = inputs_LIM.THESAN21_OIII_params
+            line_dict = THESAN21_OIII_params
         elif line == 'OII':
-            line_dict = inputs_LIM.THESAN21_OII_params
+            line_dict = THESAN21_OII_params
         elif line == 'Ha':
-            line_dict = inputs_LIM.THESAN21_Ha_params
+            line_dict = THESAN21_Ha_params
         elif line == 'Hb':
-            line_dict = inputs_LIM.THESAN21_Hb_params
+            line_dict = THESAN21_Hb_params
         else:
             print('\nLINE NOT IMPLEMENTED YET IN THESAN21')
             return -1
@@ -94,7 +93,7 @@ def Lagache18(line, dotM, z, line_dict):
         return -1
 
     if line_dict is None:
-        line_dict = inputs_LIM.Lagache18_CII_params
+        line_dict = Lagache18_CII_params
 
     alpha_SFR =line_dict['alpha_SFR_0'] + line_dict['alpha_SFR'] * z
 
@@ -123,7 +122,7 @@ def Yang21(line, massVector, z, line_dict):
 
     if line == 'CO21':
         if line_dict is None:
-            line_dict = inputs_LIM.Yang21_CO21_params
+            line_dict = Yang21_CO21_params
                     
         logM1 = np.where(z < 4.0,
                         YangEmp_f2(12.12, -0.1704, 0, z),
@@ -194,7 +193,7 @@ def Li16(line, dotM, line_dict):
 
     if line_dict is None:
         if line == 'CO21':
-            line_dict = inputs_LIM.Li16_C021_params
+            line_dict = Li16_C021_params
         else:
             print('\nLINE NOT IMPLEMENTED YET IN LI16')
             return -1
@@ -210,11 +209,11 @@ def Li16(line, dotM, line_dict):
     Lprime = (10.**-beta * L_IR)**(1./alpha)
 
     if line == 'CO21': # 2-1 transition
-        lambda_line = 1.3e7*inputs_LIM.u.AA 
+        lambda_line = 1.3e7*u.AA 
     elif line == 'CO10': # 2-1 transition
-        lambda_line = 2.6e7*inputs_LIM.u.AA 
-    nu_rest = (inputs_LIM.cu.c / (lambda_line)).to(inputs_LIM.u.GHz) # rest frame frequency in Hz 
-    scale_nu = nu_rest/(115*inputs_LIM.u.GHz)
+        lambda_line = 2.6e7*u.AA 
+    nu_rest = (cu.c / (lambda_line)).to(u.GHz) # rest frame frequency in Hz 
+    scale_nu = nu_rest/(115*u.GHz)
 
     log10_L = np.log10(L0*Lprime*scale_nu**3)
 

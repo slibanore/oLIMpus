@@ -6,10 +6,7 @@ BGU - April 2025
 
 """
 
-import mcfit
-import numpy as np 
-import numexpr as ne
-from oLIMpus import constants, cosmology 
+from oLIMpus.inputs_LIM import * 
 
 class Correlations_LIM:
     "Class that calculates and keeps the correlation functions."

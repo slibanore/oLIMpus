@@ -4,24 +4,8 @@ Author: Sarah Libanore
 BGU - April 2025
 """
 
-import numpy as np 
-import powerbox as pbox
-from scipy.interpolate import interp1d
-from oLIMpus import z21_utilities, sfrd, LineLuminosity, cosmology
-try:
-    from oLIMpus import BMF
-except:
-    print('The reionization.py file is not yet public')
-from oLIMpus.zeus21_local.zeus21.maps import reionization_maps as reio
-import numexpr as ne 
-from scipy.interpolate import InterpolatedUnivariateSpline as spline
-from tqdm import trange, tqdm
-import pickle
-import os
-from matplotlib import colors as cc 
-import matplotlib.cm as cm
-from matplotlib.colors import LogNorm
-import matplotlib.pyplot as plt 
+from oLIMpus.inputs_LIM import * 
+from oLIMpus import LineLuminosity
 
 min_value = -50
 max_value = 40

@@ -2,12 +2,29 @@
 Takes inputs for LIM and stores them in useful classes
 
 Author: Sarah Libanore
-BGU - April 2025
+BGU - June 2026
 """
 
+
+# all the imports you will need throughtout the run 
+from zeus21 import constants, cosmology, sfrd, z21_utilities, reionization
 import astropy.constants as cu
 import astropy.units as u
 import numpy as np 
+from scipy.integrate import simpson
+from scipy.stats import lognorm
+from scipy.interpolate import interp1d
+from scipy.interpolate import InterpolatedUnivariateSpline as spline
+import mcfit
+import numexpr as ne
+import powerbox as pbox
+from tqdm import trange, tqdm
+import pickle
+import os
+from matplotlib import colors as cc 
+import matplotlib.cm as cm
+from matplotlib.colors import LogNorm
+import matplotlib.pyplot as plt 
 
 class LineParams_Input:
     def __init__ (self, 
