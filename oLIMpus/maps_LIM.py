@@ -5,7 +5,7 @@ BGU - April 2025
 """
 
 from oLIMpus.inputs_LIM import * 
-from oLIMpus import LineLuminosity
+from oLIMpus.coefficients_LIM import get_LIM_coefficients
 
 min_value = -50
 max_value = 40
