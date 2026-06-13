@@ -1,6 +1,15 @@
+"""
+
+Contains SFR-luminosity relations to compute star-forming lines luminosities
+
+Author: Sarah Libanore
+BGU - June 2026
+
+"""
+
 from oLIMpus.inputs_LIM import * 
 
-# scale SFR
+# powerlaw to scale the SFR
 def powerlaw(line, dotM, line_dict):
 
     L = dotM**line_dict['alpha_SFR']
@@ -44,7 +53,6 @@ def Yang24(line, dotM, line_dict):
     log10_L = np.log10(L_line)
     
     return log10_L
-
 
 # from arXiv:2111.02411, Eq. 1
 def THESAN21(line, dotM, line_dict):
@@ -110,7 +118,6 @@ def Lagache18(line, dotM, z, line_dict):
     log10_L = alpha_SFR * np.log10(dotM) + beta_SFR 
 
     return log10_L
-
 
 ########################################################
 ### SUB-MM 
@@ -191,7 +198,6 @@ def Yang21(line, massVector, z, line_dict):
     log10_L = np.log10(A*(2*N*massVector/((massVector/M1)**-a+(massVector/M1)**b)))
 
     return log10_L
-
 
 # from arXiv:1503.08833
 def Li16(line, dotM, line_dict):
