@@ -44,20 +44,22 @@ class get_LIM_coefficients:
         # if z_Init and SFRD_Init are not provided, we initialize them here. This allows us to avoid redundant computations if they were already initialized in the parent class and passed as arguments.
         if z_Init is None:
             # to perform cross-correlation studies, the redshift array has to be the same as in zeus21
-            z_Init = Z_init(UserParams=UserParams, CosmoParams=CosmoParams) 
+            self.z_Init = Z_init(UserParams=UserParams, CosmoParams=CosmoParams) 
 
         if SFRD_Init is None:
-            SFRD_Init = SFRD_class(UserParams, CosmoParams, AstroParams, HMFinterp, z_Init) 
+            self.SFRD_Init = SFRD_class(UserParams, CosmoParams, AstroParams, HMFinterp, self.z_Init) 
+
+        self.USE_POPIII = AstroParams.USE_POPIII 
 
         # compute sigmaR for the required resolution and redshift array
-        self.sigmaofRtab_LIM = np.array([HMFinterp.sigmaR_int(Line_Parameters._R, zz) for zz in z_Init.zintegral]).T[0]
+        self.sigmaofRtab_LIM = np.array([HMFinterp.sigmaR_int(Line_Parameters._R, zz) for zz in self.z_Init.zintegral]).T[0]
 
         # compute the average luminosity density in Lagrangian space
-        zLIM_longer = np.geomspace(UserParams.zmin_T21, constants.zmax_AstroBreak, 128) #e xtend to z = constants.zmax_AstroBreak for extrapolation purposes
+        zLIM_longer = np.geomspace(UserParams.zmin, constants.zmax_AstroBreak, 128) #e xtend to z = constants.zmax_AstroBreak for extrapolation purposes
         zLIM, mArray_LIM = np.meshgrid(zLIM_longer, HMFinterp.Mhtab, indexing = 'ij', sparse = True)
 
         # average luminosity density in Lagrangian space
-        rhoL_avg_longer = np.trapz(self.rhoL_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, SFRD_Init, mArray_LIM, zLIM), HMFinterp.logtabMh, axis = 1) 
+        rhoL_avg_longer = np.trapz(self.rhoL_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, mArray_LIM, zLIM), HMFinterp.logtabMh, axis = 1) 
 
         # correction to the average SFRD specific for Li16 model of CO 
         if LineParams.stoch_type == 'mean' and LineParams.LINE_MODEL == 'Li16':
@@ -73,10 +75,10 @@ class get_LIM_coefficients:
 
         rhoL_interp = sfrd.interpolate.interp1d(zLIM_longer, rhoL_avg_longer, kind = 'cubic', bounds_error = False, fill_value = 0,) 
 
-        self.rhoL_avg = rhoL_interp(z_Init.zintegral) # Lagrangian
-        self.rhoL_bar =  rhoL_interp(z_Init.zintegral) # this will be converted to EPS and to Eulerian
+        self.rhoL_avg = rhoL_interp(self.z_Init.zintegral) # Lagrangian
+        self.rhoL_bar =  rhoL_interp(self.z_Init.zintegral) # this will be converted to EPS and to Eulerian
 
-        self.compute_gamma_LIM(CosmoParams, AstroParams, LineParams, HMFinterp, z_Init, SFRD_Init)
+        self.compute_gamma_LIM(CosmoParams, AstroParams, LineParams, HMFinterp)
 
         # Correct Eulerian-Lagrangian mean
         if(UserParams.C2_RENORMALIZATION_FLAG==True): 
@@ -99,12 +101,12 @@ class get_LIM_coefficients:
         if LineParams.OBSERVABLE_LIM == 'Tnu':
 
             # c1 = uK / Lsun * Mpc^3
-            self.coeff1_LIM = (((constants.c_kms * u.km/u.s)**3 * (1+z_Init.zintegral)**2 / (8*np.pi * (cosmology.Hub(CosmoParams, z_Init.zintegral) * u.km/u.s/u.Mpc) * (LineParams.nu_rest)**3 * cu.k_B)).to(u.uK * u.Mpc**3 / u.Lsun )).value
+            self.coeff1_LIM = (((constants.c_kms * u.km/u.s)**3 * (1+self.z_Init.zintegral)**2 / (8*np.pi * (cosmology.Hub(CosmoParams, self.z_Init.zintegral) * u.km/u.s/u.Mpc) * (LineParams.nu_rest)**3 * cu.k_B)).to(u.uK * u.Mpc**3 / u.Lsun )).value
             
         elif LineParams.OBSERVABLE_LIM == 'Inu':
 
             # c1 = cm / sr / Hz so once is multiplied by rhoL gives Jy/sr
-            self.coeff1_LIM = ((constants.c_kms * u.km/u.s / (4*np.pi *u.steradian) / (cosmology.Hub(CosmoParams, z_Init.zintegral) * u.km/u.s/u.Mpc) / (LineParams.nu_rest) * u.Lsun / u.Mpc**3).to(u.Jy/u.steradian)).value
+            self.coeff1_LIM = ((constants.c_kms * u.km/u.s / (4*np.pi *u.steradian) / (cosmology.Hub(CosmoParams, self.z_Init.zintegral) * u.km/u.s/u.Mpc) / (LineParams.nu_rest) * u.Lsun / u.Mpc**3).to(u.Jy/u.steradian)).value
 
             if LineParams.LINE == 'SFRD':
                 self.coeff1_LIM = 1.
@@ -117,7 +119,7 @@ class get_LIM_coefficients:
 
         if LineParams.shot_noise:
 
-            integrand_shot = self.P_shot_noise_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, SFRD_Init, HMFinterp.Mhtab[np.newaxis,:], z_Init.zintegral[:,np.newaxis])
+            integrand_shot = self.P_shot_noise_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, HMFinterp.Mhtab[np.newaxis,:], self.z_Init.zintegral[:,np.newaxis])
             
             if LineParams.OBSERVABLE_LIM == 'Tnu':
 
@@ -161,23 +163,23 @@ class get_LIM_coefficients:
         return EPS_HMF_corr_Lag, mArray_LIM, zArray_LIM, deltaArray_LIM
     
 
-    def compute_gamma_LIM(self, CosmoParams, AstroParams, LineParams, HMFinterp, z_Init, SFRD_Init):
+    def compute_gamma_LIM(self, CosmoParams, AstroParams, LineParams, HMFinterp):
 
         # EPS factors 
         Nsigmad = 1.0 # how many sigmas we explore
         Nds = 3 # how many deltas
         deltatab_norm = np.linspace(-Nsigmad,Nsigmad,Nds)
 
-        EPS_HMF_corr_Lag, mArray_LIM, zArray_LIM, deltaArray_LIM = self.compute_sigmaR_nu_LIM(CosmoParams, HMFinterp, z_Init.zintegral, HMFinterp.Mhtab, deltatab_norm)
+        EPS_HMF_corr_Lag, mArray_LIM, zArray_LIM, deltaArray_LIM = self.compute_sigmaR_nu_LIM(CosmoParams, HMFinterp, self.z_Init.zintegral, HMFinterp.Mhtab, deltatab_norm)
 
         EPS_HMF_corr = (1.0 + deltaArray_LIM) * EPS_HMF_corr_Lag
 
         # get the correct mean accounting for EPS 
-        integrand_LIM_Lag = EPS_HMF_corr_Lag * self.rhoL_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, SFRD_Init, mArray_LIM, zArray_LIM)
+        integrand_LIM_Lag = EPS_HMF_corr_Lag * self.rhoL_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, mArray_LIM, zArray_LIM)
         self.rhoL_dR_Lag = np.trapz(integrand_LIM_Lag, HMFinterp.logtabMh, axis = 1)
 
         # get the correct mean accounting for EPS and Eulerian
-        integrand_LIM = EPS_HMF_corr * self.rhoL_integrand(False,CosmoParams, AstroParams, LineParams, HMFinterp, SFRD_Init, mArray_LIM, zArray_LIM)
+        integrand_LIM = EPS_HMF_corr * self.rhoL_integrand(False,CosmoParams, AstroParams, LineParams, HMFinterp, mArray_LIM, zArray_LIM)
         self.rhoL_dR = np.trapz(integrand_LIM, HMFinterp.logtabMh, axis = 1)
 
         # compute the gammas for the lognormal approximation as the derivatives of rhoL in Eulerian space -- the function is defined in sfrd.py in zeus21
@@ -198,21 +200,21 @@ class get_LIM_coefficients:
 
 
     # Integrand to compute the luminosity density
-    def rhoL_integrand(self, dotM, CosmoParams, AstroParams, LineParams, HMFinterp, SFRD_Init, massVector, z):
+    def rhoL_integrand(self, dotM, CosmoParams, AstroParams, LineParams, HMFinterp, massVector, z):
         "Integrand to compute the average line luminosity density"
 
         Mh = massVector # in Msun
 
         HMF_curr = np.exp(HMFinterp.logHMFint((np.log(Mh), z))) # in Mpc-3 Msun-1 
 
-        Ltab_curr = self.LineLuminosity(dotM, CosmoParams, AstroParams, LineParams, HMFinterp, SFRD_Init, Mh, z) 
+        Ltab_curr = self.LineLuminosity(dotM, CosmoParams, AstroParams, LineParams, HMFinterp, Mh, z) 
 
         integrand_LIM = HMF_curr * Ltab_curr * Mh # in Lsun / Mpc3
 
         return integrand_LIM
 
 
-    def P_shot_noise_integrand(self, dotM, CosmoParams, AstroParams, LineParams, HMFinterp, SFRD_Init, massVector, z):
+    def P_shot_noise_integrand(self, dotM, CosmoParams, AstroParams, LineParams, HMFinterp, massVector, z):
         "Integrand to compute the average line luminosity density"
 
         Mh = massVector # in Msun
@@ -222,7 +224,7 @@ class get_LIM_coefficients:
         dMdlogM = Mh
         dndlogM = HMF_curr * dMdlogM
 
-        Ltab_curr = self.LineLuminosity(dotM, CosmoParams, AstroParams, LineParams, HMFinterp, SFRD_Init, Mh, z) 
+        Ltab_curr = self.LineLuminosity(dotM, CosmoParams, AstroParams, LineParams, HMFinterp, Mh, z) 
 
         integrand_P_shot_noise = dndlogM**-1 * (dndlogM * Ltab_curr)**2  # units Lsun2 Mpc-3 because of the delta Dirac ? 
 
@@ -244,7 +246,7 @@ class get_LIM_coefficients:
         return integrand_P_shot_noise
 
 
-    def LineLuminosity(self, dotM, CosmoParams, AstroParams, LineParams, HMFinterp, SFRD_Init, massVector, z):
+    def LineLuminosity(self, dotM, CosmoParams, AstroParams, LineParams, HMFinterp, massVector, z):
         "Luminosity-SFR-Mh relation for star forming lines. Units: Lsun"
 
         # check that all flags are compatible
@@ -259,7 +261,7 @@ class get_LIM_coefficients:
         # --- #   
         # if not given as input, compute the SFR 
         if dotM is False:
-            dotM = SFRD_Init.SFR(CosmoParams, AstroParams, HMFinterp, massVector, z, 2, False, False)    
+            dotM = self.SFRD_Init.SFR(CosmoParams, AstroParams, HMFinterp, massVector, z, 2, False, False)    
 
         # --- #
         # line luminosity computation
@@ -313,3 +315,31 @@ class get_LIM_coefficients:
         L_of_Mh[dotM < 1e-20] = 0.
 
         return L_of_Mh
+
+
+    def __getattr__(self, name):
+        """
+        Access the attributes of the classes that we initialized directly from the get_T21_coefficients class, without having to specify which class they come from
+
+        Parameters
+        ----
+        name: str
+            Name of the attribute to get
+        
+        Returns
+        -------
+        attribute            
+        The attribute with the given name, if it exists in any of the classes that we initialized. If it does not exist in any of them, raises an AttributeError.
+        """
+
+        list_of_cls = [self.z_Init, self.SFRD_Init]
+
+        if self.USE_POPIII:
+            list_of_cls += [self.relvel]
+        for cls in list_of_cls:
+            try:
+                return getattr(cls, name)
+            except AttributeError:
+                pass
+
+        raise AttributeError(f"{type(self).__name__} has no attribute {name!r}")

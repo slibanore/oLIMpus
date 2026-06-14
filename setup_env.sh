@@ -2,11 +2,12 @@
 conda deactivate
 conda env remove --name oLIMpus --all -y
 conda create --name oLIMpus python=3.10 -y
-
 source $(conda info --base)/etc/profile.d/conda.sh
 conda activate oLIMpus
-
 conda install -y cython ipykernel pygments pexpect
+
+pip install --upgrade --force-reinstall --no-cache-dir --no-deps "zeus21 @ git+https://github.com/slibanore/Zeus21.git@zeus_hack"
+
 pip install --upgrade .
 
 echo "Conda environment 'oLIMpus' is set up and packages are installed."
