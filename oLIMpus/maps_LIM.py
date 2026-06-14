@@ -6,9 +6,13 @@ BGU - June 2026
 
 from oLIMpus.inputs_LIM import * 
 from oLIMpus.coefficients_LIM import get_LIM_coefficients
+from oLIMpus.correlations_LIM import Power_Spectra_LIM
 
-from zeus21.maps import * 
+from zeus21 import inputs
+from dataclasses import dataclass, field as _field, InitVar
 
+# ----------------------------------------------------------------------- #
+# define colormaps 
 min_value = -50
 max_value = 40
 mid_point = abs(min_value)/(abs(min_value)+abs(max_value))
@@ -34,76 +38,88 @@ colors_list = [(0, "black"),
     (0.5, winter_cmap(150)),
     (1, winter_cmap(255))]     
 LIM_colour_2 = cc.LinearSegmentedColormap.from_list("LIM_colour_1",colors_list)
+# ----------------------------------------------------------------------- #
 
-
+@dataclass()
 class CoevalBox_LIM_analytical:
     "Class that calculates and keeps coeval maps, one z at a time."
     "The computation is done analytically based on the estimated density and LIM power spectra"
 
-    def __init__(self, LIM_coeff, LIM_corr, LIM_Power_Spectrum, Line_Parameters, z, input_Resolution, Lbox=600, Nbox=200, seed=1605, RSD=0, get_density_box = True):
+    # arguments to pass
+    LineParams: InitVar[Line_Parameters]
+    CoeffStructure: InitVar[get_LIM_coefficients]
+    PowerSpectra: InitVar[Power_Spectra_LIM]
+    input_z: np.ndarray
+    input_density: np.ndarray 
 
-        zlist = LIM_coeff.zintegral 
-        _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
-        self.z = zlist[_iz]
-        
-        self.Nbox = Nbox
-        self.Lbox = Lbox
-        self.seed = seed
+    # box params
+    input_boxlength: float = _field(default=300.)
+    ncells: int = _field(default=300)
+    seed: int = _field(default=1234)
+    input_Resolution: float = _field(default=0.5)
 
-        self.Inu_bar = LIM_coeff.Inu_bar[_iz]
-        klist = LIM_Power_Spectrum.klist_PS
+    # boxes
+    density: np.ndarray = _field(init=False)
+    Inu_box_noiseless: np.ndarray = _field(init=False)
+    Inu_box_noiseless_smooth: np.ndarray = _field(init=False)
+    Inu_box: np.ndarray = _field(init=False)
+    Inu_box_smooth: np.ndarray = _field(init=False)
+    shotnoise_box: np.ndarray = _field(init=False)
 
-        Resolution = max(input_Resolution, Line_Parameters._R, Lbox/Nbox)
-        #if Resolution != input_Resolution:
-        #    print('The resolution cannot be smaller than R and Lbox/Nbox')
-        #    print('Smoothing R changed to ' + str(Resolution))
+    # other attributes
+    _klist: np.ndarray = _field(init=False)
+    _k3over2pi2: np.ndarray = _field(init=False)
+    Inu_bar: np.ndarray = _field(init=False)
+    _Pnu: np.ndarray = _field(init=False)
 
-        # Produce density box
-        if get_density_box:
-            Pm = np.outer(LIM_Power_Spectrum.lin_growth**2, LIM_corr._PklinCF) [_iz,:]
+    def __post_init__(self, LineParams, CoeffStructure, PowerSpectra):
 
-            Pm_interp = interp1d(klist,Pm,fill_value=0.0,bounds_error=False)
+        _iz = z21_utilities.find_nearest_idx(CoeffStructure.zintegral, self.input_z)
+        self._klist = PowerSpectra.klist_PS
+        self._k3over2pi2 = self._klist**3/(2*np.pi**2)
 
-            pb_delta = pbox.PowerBox(
-                N=self.Nbox,                     
-                dim= 3,                     
-                pk = lambda k: Pm_interp(k), 
-                boxlength = self.Lbox,           
-                seed = self.seed,
-            )
+        self.Inu_bar = CoeffStructure.Inu_bar[_iz]
 
-        if RSD == 0:
-            Pnu = LIM_Power_Spectrum._Pk_LIM[_iz,:]
+        Resolution = max(self.input_Resolution, LineParams._R, self.input_boxlength/self.ncells)
+
+        ### generate densities
+        if self.input_density is None:
+            self.density = self.input_density
         else:
-            Pnu = LIM_Power_Spectrum._Pk_LIM_RSD[_iz,:]
+            self.density, pbs = self.generate_density_pb()
 
-        Pnu_interp = interp1d(klist,Pnu,fill_value=0.0,bounds_error=False)
+        if PowerSpectra.RSD_MODE == 0:
+            self._Pnu = PowerSpectra._Pk_LIM[_iz,:]
+        else:
+            self._Pnu = PowerSpectra._Pk_LIM_RSD[_iz,:]
+
+        Pnu_interp = spline(self._klist,self._Pnu)
 
         norm = Pnu_interp(0.1)
 
         pb = pbox.LogNormalPowerBox(
-            N=self.Nbox,                     
+            N=self.ncells,                     
             dim= 3,                     
             pk = lambda k: Pnu_interp(k)/norm, 
-            boxlength = self.Lbox,           
+            boxlength = self.input_boxlength,           
             seed = self.seed,
         )
         self.Inu_box_noiseless = pb.delta_x()*np.sqrt(norm) + self.Inu_bar
 
         # create shot noise box
-        if Line_Parameters.shot_noise:
+        if LineParams.shot_noise:
 
-            Pshot_interp = lambda k: LIM_coeff.shot_noise[_iz]
+            Pshot_interp = lambda k: CoeffStructure.shot_noise[_iz]
 
             pb_shot = pbox.PowerBox(
-                N=self.Nbox,                     
+                N=self.ncells,                     
                 dim= 3,                     
                 pk = lambda k: Pshot_interp(k), 
-                boxlength = self.Lbox,           
+                boxlength = self.input_boxlength ,          
                 seed = self.seed+2, # uncorrelated from the density field
             )
 
-            self.shotnoise_box = pb_shot.delta_x() + LIM_coeff.shot_noise[_iz] # shot noise box
+            self.shotnoise_box = pb_shot.delta_x() + CoeffStructure.shot_noise[_iz] # shot noise box
         else:
             self.shotnoise_box = np.zeros_like(self.Inu_box_noiseless)
 
@@ -111,7 +127,7 @@ class CoevalBox_LIM_analytical:
         self.Inu_box = self.Inu_box_noiseless + self.shotnoise_box
 
         # smooth the box over R 
-        klistfftx = np.fft.fftfreq(self.Inu_box.shape[0],Lbox/Nbox)*2*np.pi
+        klistfftx = np.fft.fftfreq(self.Inu_box.shape[0],self.input_boxlength/self.ncells)*2*np.pi
         klist3Dfft = np.sqrt(np.sum(np.meshgrid(klistfftx**2, klistfftx**2, klistfftx**2, indexing='ij'), axis=0))
         Inu_noiseless_fft = np.fft.fftn(self.Inu_box_noiseless)
         Inu_fft = np.fft.fftn(self.Inu_box)
@@ -119,11 +135,22 @@ class CoevalBox_LIM_analytical:
         self.Inu_box_noiseless_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, Inu_noiseless_fft))
         self.Inu_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, Inu_fft))
 
-        if get_density_box:
+    def generate_density_pb(self):
+        density = np.zeros((len(self.input_z),self.ncells,self.ncells,self.ncells))
+        pbs = []
+        for iz, z in enumerate(self.input_z):
+            Pd_spl = spline(np.log(self._klist), np.log(self._Pd[iz])) # density at min z
+            pb = pbox.PowerBox(
+                N=self.ncells,
+                dim=3,
+                pk = lambda k: np.exp(Pd_spl(np.log(k))),
+                boxlength = self.input_boxlength,
+                seed = self.seed
+            )
+            density[iz] = pb.delta_x()
+            pbs.append(pb)
+        return density, pbs
 
-            self.density_box = pb_delta.delta_x() # density box
-            density_fft = np.fft.fftn(self.density_box)
-            self.density_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, density_fft))
 
 
 class CoevalBox_percell:
