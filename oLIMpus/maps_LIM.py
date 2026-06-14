@@ -1,11 +1,13 @@
 """
 Make LIM maps! 
 Author: Sarah Libanore
-BGU - April 2025
+BGU - June 2026
 """
 
 from oLIMpus.inputs_LIM import * 
 from oLIMpus.coefficients_LIM import get_LIM_coefficients
+
+from zeus21.maps import * 
 
 min_value = -50
 max_value = 40
@@ -32,6 +34,7 @@ colors_list = [(0, "black"),
     (0.5, winter_cmap(150)),
     (1, winter_cmap(255))]     
 LIM_colour_2 = cc.LinearSegmentedColormap.from_list("LIM_colour_1",colors_list)
+
 
 class CoevalBox_LIM_analytical:
     "Class that calculates and keeps coeval maps, one z at a time."
@@ -238,168 +241,6 @@ class CoevalBox_percell:
         self.density_box = density_box_3d
         density_fft = np.fft.fftn(self.density_box)
         self.density_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, density_fft))
-
-
-def get_reio_field(input_z, zeus_coeff, zeus_corr, Astro_Parameters, Cosmo_Parameters, ClassyCosmo, HMF_interpolator, Lbox=600, Nbox=200, Rmin_bubbles=0.05, seed=1605, compute_mass_weighted_xHII=False,compute_include_partlion=True,compute_partial_and_massweighted=True):
-
-    BMF_val = BMF(zeus_coeff, HMF_interpolator, Cosmo_Parameters, Astro_Parameters, ClassyCosmo, R_linear_sigma_fit_input=10, FLAG_converge=True, max_iter=10, ZMAX_REION = 30,Rmin=Rmin_bubbles)
-
-    box_reio = reio(Cosmo_Parameters, ClassyCosmo, zeus_corr, zeus_coeff, BMF_val, input_z, 
-                 input_boxlength=Lbox, ncells=Nbox, seed=seed, r_precision=1., Rs=None, barrier=None, 
-                 PRINT_TIMER=False, 
-                 LOGNORMAL_DENSITY=False, COMPUTE_DENSITY_AT_ALLZ=True, SPHERIZE=False, 
-                 COMPUTE_MASSWEIGHTED=compute_mass_weighted_xHII, lowres_massweighting=1, COMPUTE_PARTIAL_IONIZATIONS=compute_include_partlion,
-                 COMPUTE_PARTIAL_AND_MASSWEIGHTED=compute_partial_and_massweighted, COMPUTE_ZREION=False
-                )
-    
-    # if compute_include_partlion and compute_mass_weighted_xHII:
-    #     compute_partial_and_massweighted = True
-
-    if compute_partial_and_massweighted:
-        reionization_map = box_reio.ion_field_partial_massweighted_allz
-        ion_frac = box_reio.ion_frac_partial_massweighted
-
-    else:
-        if compute_include_partlion:
-            reionization_map = box_reio.ion_field_partial_allz
-            ion_frac = box_reio.ion_frac_partial
-        else:
-            reionization_map = box_reio.ion_field_allz
-            if compute_mass_weighted_xHII:
-                ion_frac = box_reio.ion_frac_massweighted
-            else:
-                ion_frac = box_reio.ion_frac
-
-    return reionization_map, ion_frac
-
-
-class CoevalMaps_T21noreionization:
-    "Class that calculates and keeps coeval maps, one z at a time."
-
-    def __init__(self, T21_coefficients, Power_Spectrum, z, Lbox=600, Nbox=200, seed=1605):
-        'the KIND flag determines the kind of map you make. Options are:'
-        'KIND = 0, only T21 lognormal. OK approximation'
-        'KIND = 1, density and T21 correlated. T21 has a gaussian and a lognormal component. Decent approximation'
-        'KIND = 2, all maps'
-        'KIND = 3, same as 2 but integrating over all R. Slow but most accurate'
-
-        zlist = T21_coefficients.zintegral 
-        _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
-
-        self.T21global_noR = T21_coefficients.T21avg_noR[_iz] 
-        
-
-        self.Nbox = Nbox
-        self.Lbox = Lbox
-        self.seed = seed
-        self.z = zlist[_iz] #will be slightly different from z input
-
-        klist = Power_Spectrum.klist_PS
-        k3over2pi2 = klist**3/(2*np.pi**2)
-
-        Dsq_T21_lin = Power_Spectrum.Deltasq_T21_lin_noR[_iz] 
-
-        Dsq_dT21 = Power_Spectrum.Deltasq_dT21[_iz]
-
-        Dsq_T21 = Power_Spectrum.Deltasq_T21_noR[_iz]
-
-        Pd = Power_Spectrum.Deltasq_d_lin[_iz,:]/k3over2pi2
-        #Pdinterp = interp1d(klist,Pd,fill_value=0.0,bounds_error=False)
-        Pd_spl = spline(np.log(klist), np.log(Pd))
-
-        pb = pbox.PowerBox(
-            N=self.Nbox,                     
-            dim=3,                     
-            #pk = lambda k: Pdinterp(k), 
-            pk = lambda k: np.exp(Pd_spl(np.log(k))), 
-            boxlength = self.Lbox,           
-            seed = self.seed               
-        )
-
-        self.deltamap = pb.delta_x() #density map, basis of this KIND of approach
-
-        #then we make a map of the linear T21 fluctuation, better to use the cross to keep sign, at linear level same 
-        PdT21 = Dsq_dT21/k3over2pi2
-
-        #powerratioint = interp1d(klist,PdT21/Pd,fill_value=0.0,bounds_error=False)
-        powerratio_spl = spline(klist, PdT21/Pd) #cross can be negative, so can't interpolate over log values
-
-
-        deltak = pb.delta_k()
-
-        powerratio = powerratio_spl(pb.k())
-        T21lin_k = powerratio * deltak
-        self.T21maplin= self.T21global_noR + z21_utilities.powerboxCtoR(pb,mapkin = T21lin_k)
-
-        #now make a nonlinear correction, built as \sum_R [e^(gR dR) - gR dR]. Uncorrelatd with all dR so just a separate field!
-        #NOTE: its not guaranteed to work, excess power can be negative in some cases! Not for each component xa, Tk, but yes for T21
-        excesspower21 = (Dsq_T21-Dsq_T21_lin)/k3over2pi2
-
-        lognormpower = interp1d(klist,excesspower21/self.T21global_noR**2,fill_value=0.0,bounds_error=False)
-        #G or logG? TODO revisit
-        pbe = pbox.LogNormalPowerBox(
-            N=self.Nbox,                     
-            dim=3,                     
-            pk = lambda k: lognormpower(k), 
-            boxlength = self.Lbox,           
-            seed = self.seed+1                # uncorrelated
-        )
-
-        self.T21mapNL =self.T21global_noR* pbe.delta_x()
-
-        #and finally, just add them together!
-        self.T21map =  self.T21maplin + self.T21mapNL 
-
-
-
-class CoevalBox_T21reionization:
-    "Re-build the 21cm temperature map combining the xalpha, Tk and delta for more stability in the non-linear fluctuation computation. Include the xH contribution"
-
-    def __init__(self, zeus_coeff, zeus_pk, z, reionization_map_partial, ion_frac_withpartial, Lbox=600, Nbox=200, seed=1605, MAP_T21_FULL = True,  input_Resolution = None, smooth_box = True):
-        
-        if len(reionization_map_partial) == 1:
-            reionization_map_partial = reionization_map_partial[0]
-            ion_frac_withpartial = ion_frac_withpartial[0]
-
-        self.ion_frac = ion_frac_withpartial
-        self.xH_avg_map = 1. - self.ion_frac
-        
-        self.xHI_box = reionization_map_partial
-        self.xH_box = 1. - reionization_map_partial
-        self.xH_box[np.isnan(self.xH_box)] = 0.
-
-        if MAP_T21_FULL:
-
-            zeus_box = CoevalMaps_T21noreionization(zeus_coeff, zeus_pk, z, Lbox, Nbox, seed=seed)
-
-            self.T21_map_only = zeus_box.T21map 
- 
-        else:
-            print('T21 by ingredients not yet implemented') 
-            # self.xa_map = 
-            # self.invTcol_map = 
-
-            #self.T21_map_only = cosmology.T021(Cosmo_Parameters,zeus_coeff.zintegral) * self.xa_map/(1.0 + self.xa_map) * (1.0 - zeus_coeff.T_CMB * (self.invTcol_map)) 
-
-        self.T21_map = self.T21_map_only * self.xH_box
-
-        if smooth_box:
-            if input_Resolution != None:
-                Resolution = max(input_Resolution, Lbox/Nbox)
-            else:
-                Resolution = Lbox/Nbox
-
-            klistfftx = np.fft.fftfreq(self.T21_map.shape[0],Lbox/Nbox)*2*np.pi
-            klist3Dfft = np.sqrt(np.sum(np.meshgrid(klistfftx**2, klistfftx**2, klistfftx**2, indexing='ij'), axis=0))
-
-            T21_fft = np.fft.fftn(self.T21_map)
-            self.T21_map = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, T21_fft))
-
-            T21_map_only_fft = np.fft.fftn(self.T21_map_only)
-            self.T21_map_only = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, T21_map_only_fft))
-
-            xH_box_fft = np.fft.fftn(self.xH_box)
-            self.xH_box = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, xH_box_fft))
 
 
 def build_lightcone(which_lightcone,
