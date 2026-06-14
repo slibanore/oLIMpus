@@ -6,7 +6,7 @@ source $(conda info --base)/etc/profile.d/conda.sh
 conda activate oLIMpus
 conda install -y cython ipykernel pygments pexpect
 
-pip install --upgrade --force-reinstall --no-cache-dir --no-deps "zeus21 @ git+https://github.com/slibanore/Zeus21.git@zeus_hack"
+pip install --upgrade --force-reinstall --no-cache-dir --no-deps "zeus21 @ git+https://github.com/ZeusCosmo/Zeus21@zeus21_hack"
 
 pip install --upgrade .
 
