@@ -9,8 +9,10 @@ from oLIMpus.coefficients_LIM import get_LIM_coefficients
 from oLIMpus.correlations_LIM import Power_Spectra_LIM
 
 from zeus21 import inputs
+from zeus21.inputs import Cosmo_Parameters, Astro_Parameters
+from zeus21.cosmology import HMF_interpolator
 from dataclasses import dataclass, field as _field, InitVar
-
+from typing import Optional
 # ----------------------------------------------------------------------- #
 # define colormaps 
 min_value = -50
@@ -46,11 +48,12 @@ class CoevalBox_LIM_analytical:
     "The computation is done analytically based on the estimated density and LIM power spectra"
 
     # arguments to pass
+    CosmoParams: InitVar[Cosmo_Parameters]
     LineParams: InitVar[Line_Parameters]
     CoeffStructure: InitVar[get_LIM_coefficients]
     PowerSpectra: InitVar[Power_Spectra_LIM]
     input_z: np.ndarray
-    input_density: np.ndarray 
+    input_density: Optional[np.ndarray] = None
 
     # box params
     input_boxlength: float = _field(default=300.)
@@ -60,6 +63,7 @@ class CoevalBox_LIM_analytical:
 
     # boxes
     density: np.ndarray = _field(init=False)
+    density_smooth: np.ndarray = _field(init=False)
     Inu_box_noiseless: np.ndarray = _field(init=False)
     Inu_box_noiseless_smooth: np.ndarray = _field(init=False)
     Inu_box: np.ndarray = _field(init=False)
@@ -71,8 +75,9 @@ class CoevalBox_LIM_analytical:
     _k3over2pi2: np.ndarray = _field(init=False)
     Inu_bar: np.ndarray = _field(init=False)
     _Pnu: np.ndarray = _field(init=False)
+    _Pd: np.ndarray = _field(init=False)
 
-    def __post_init__(self, LineParams, CoeffStructure, PowerSpectra):
+    def __post_init__(self, CosmoParams, LineParams, CoeffStructure, PowerSpectra):
 
         _iz = z21_utilities.find_nearest_idx(CoeffStructure.zintegral, self.input_z)
         self._klist = PowerSpectra.klist_PS
@@ -82,11 +87,13 @@ class CoevalBox_LIM_analytical:
 
         Resolution = max(self.input_Resolution, LineParams._R, self.input_boxlength/self.ncells)
 
+        self._Pd = np.outer(PowerSpectra.lin_growth**2, CosmoParams._PklinCF) 
+
         ### generate densities
-        if self.input_density is None:
+        if self.input_density is not None:
             self.density = self.input_density
         else:
-            self.density, pbs = self.generate_density_pb()
+            self.density, pbs = generate_density_pb(CoeffStructure.zintegral, self.input_boxlength, self.ncells, self.seed, self._klist, self._Pd)
 
         if PowerSpectra.RSD_MODE == 0:
             self._Pnu = PowerSpectra._Pk_LIM[_iz,:]
@@ -135,60 +142,95 @@ class CoevalBox_LIM_analytical:
         self.Inu_box_noiseless_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, Inu_noiseless_fft))
         self.Inu_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, Inu_fft))
 
-    def generate_density_pb(self):
-        density = np.zeros((len(self.input_z),self.ncells,self.ncells,self.ncells))
-        pbs = []
-        for iz, z in enumerate(self.input_z):
-            Pd_spl = spline(np.log(self._klist), np.log(self._Pd[iz])) # density at min z
-            pb = pbox.PowerBox(
-                N=self.ncells,
-                dim=3,
-                pk = lambda k: np.exp(Pd_spl(np.log(k))),
-                boxlength = self.input_boxlength,
-                seed = self.seed
-            )
-            density[iz] = pb.delta_x()
-            pbs.append(pb)
-        return density, pbs
+        density_fft = np.fft.fftn(self.density)
+        self.density_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, density_fft))
+
+def generate_density_pb(input_z, input_boxlength, ncells, seed, _klist,_Pd):
+    density = np.zeros((len(input_z),ncells,ncells,ncells))
+    pbs = []
+    for iz, z in enumerate(input_z):
+        Pd_spl = spline(np.log(_klist), np.log(_Pd[iz])) # density at min z
+        pb = pbox.PowerBox(
+            N=ncells,
+            dim=3,
+            pk = lambda k: np.exp(Pd_spl(np.log(k))),
+            boxlength = input_boxlength,
+            seed = seed
+        )
+        density[iz] = pb.delta_x()
+        pbs.append(pb)
+
+    return density, pbs
 
 
-
+@dataclass()
 class CoevalBox_percell:
     "Produce maps by computing the LIM signal cell by cell"
 
-    def __init__(self, LIM_coeff, LIM_corr, LIM_Power_Spectrum, Zeus_coeff, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HMF_interpolator, z, input_Resolution, Lbox=600, Nbox=200, seed=1605):
+    # arguments to pass
+    LineParams: InitVar[Line_Parameters]
+    CosmoParams: InitVar[Cosmo_Parameters]
+    AstroParams: InitVar[Astro_Parameters]
+    CoeffStructure: InitVar[get_LIM_coefficients]
+    PowerSpectra: InitVar[Power_Spectra_LIM]
+    HMFinterp: InitVar[HMF_interpolator]
 
-        zlist = LIM_coeff.zintegral 
-        _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
-        self.z = zlist[_iz]
-        
-        self.Nbox = Nbox
-        self.Lbox = Lbox
-        self.seed = seed
+    input_z: np.ndarray
+    input_density: Optional[np.ndarray] = None
 
-        self.Inu_bar = LIM_coeff.Inu_bar[_iz]
+    # box params
+    input_boxlength: float = _field(default=300.)
+    ncells: int = _field(default=300)
+    seed: int = _field(default=1234)
+    input_Resolution: float = _field(default=0.5)
 
-        Resolution = max(input_Resolution, Line_Parameters._R, Lbox/Nbox)
-        #if Resolution != input_Resolution:
-        #    print('The resolution cannot be smaller than R and Lbox/Nbox')
-        #    print('Smoothing R changed to ' + str(Resolution))
+    # boxes
+    density: np.ndarray = _field(init=False)
+    density_smooth: np.ndarray = _field(init=False)
+    SFRD_box: np.ndarray = _field(init=False)
+    Inu_box_noiseless: np.ndarray = _field(init=False)
+    Inu_box_noiseless_smooth: np.ndarray = _field(init=False)
+    Inu_box: np.ndarray = _field(init=False)
+    Inu_box_smooth: np.ndarray = _field(init=False)
+    shotnoise_box: np.ndarray = _field(init=False)
 
-        # get density box 
-        density_box_3d = CoevalBox_LIM_analytical(LIM_coeff, LIM_corr, LIM_Power_Spectrum, Line_Parameters, z, input_Resolution, Lbox, Nbox, seed, RSD=0,get_density_box=True).density_box
-        density_box = density_box_3d.flatten()
+    # other attributes
+    _klist: np.ndarray = _field(init=False)
+    _k3over2pi2: np.ndarray = _field(init=False)
+    Inu_bar: np.ndarray = _field(init=False)
+
+    def __post_init__(self, CosmoParams, AstroParams, LineParams, HMFinterp, CoeffStructure, PowerSpectra):
+
+        _iz = z21_utilities.find_nearest_idx(CoeffStructure.zintegral, self.input_z)[0]
+        self._klist = PowerSpectra.klist_PS
+        self._k3over2pi2 = self._klist**3/(2*np.pi**2)
+
+        self.Inu_bar = CoeffStructure.Inu_bar[_iz]
+
+        Resolution = max(self.input_Resolution, LineParams._R, self.input_boxlength/self.ncells)
+
+        self._Pd = np.outer(PowerSpectra.lin_growth**2, CosmoParams._PklinCF) 
+
+        ### generate densities
+        if self.input_density is not None:
+            self.density = self.input_density
+        else:
+            self.density, pbs = generate_density_pb(CoeffStructure.zintegral, self.input_boxlength, self.ncells, self.seed, self._klist, self._Pd)
+
+        density = self.density[_iz].flatten()
 
         # compute the local dndM through EPS and HMF
-        deltaArray = ne.evaluate('density_box')
+        deltaArray = ne.evaluate('density')
 
-        delta_crit_ST = Cosmo_Parameters.delta_crit_ST
-        a_corr_EPS = Cosmo_Parameters.a_corr_EPS
+        delta_crit_ST = CosmoParams.delta_crit_ST
+        a_corr_EPS = CosmoParams.a_corr_EPS
 
-        variance = np.var(density_box)
+        variance = np.var(self.density)
         sigmaR = ne.evaluate('sqrt(variance)')
 
-        mArray, deltaArray_Mh = np.meshgrid(HMF_interpolator.Mhtab, deltaArray, indexing = 'ij', sparse = True)
+        mArray, deltaArray_Mh = np.meshgrid(HMFinterp.Mhtab, deltaArray, indexing = 'ij', sparse = True)
 
-        sigmaM = HMF_interpolator.sigmaintlog((np.log(mArray),self.z))
+        sigmaM = HMFinterp.sigmaintlog((np.log(mArray),self.input_z))
 
         modSigmaSq = ne.evaluate('sigmaM*sigmaM - sigmaR*sigmaR')
         indexTooBig = (modSigmaSq <= 0.0)
@@ -203,47 +245,47 @@ class CoevalBox_percell:
         EPS_HMF_corr = ne.evaluate('(nu/nu0) * (sigmaM/modSigma)* (sigmaM/modSigma) * exp(-a_corr_EPS * (nu*nu-nu0*nu0)/2. )')
         #print('Done EPS corr in ' + str(time.time() - start))
 
-        HMF_curr = np.exp(HMF_interpolator.logHMFint((np.log(mArray),self.z)))
+        HMF_curr = np.exp(HMFinterp.logHMFint((np.log(mArray),self.input_z)))
 
         # ---- #
         # produce SFRD box
-        SFRtab_currII = sfrd.SFR_II(Astro_Parameters, Cosmo_Parameters, HMF_interpolator, mArray, self.z, self.z)
+        SFRtab_currII = CoeffStructure.SFR(CosmoParams, AstroParams, HMFinterp, mArray, self.input_z, 2, False, False)    
 
-        integrand = EPS_HMF_corr *  HMF_curr * SFRtab_currII * HMF_interpolator.Mhtab[:,np.newaxis]
+        integrand = EPS_HMF_corr *  HMF_curr * SFRtab_currII * HMFinterp.Mhtab[:,np.newaxis]
 
-        SFRDbox_flattend = np.trapezoid(integrand, HMF_interpolator.logtabMh, axis = 0)
+        SFRDbox_flattend = np.trapezoid(integrand, HMFinterp.logtabMh, axis = 0)
 
         SFRDbox_Lagrangian_flattened = ne.evaluate('SFRDbox_flattend')
 
-        SFRDbox_flattend_scaled = ne.evaluate('SFRDbox_Lagrangian_flattened * (1+density_box)')
+        SFRDbox_flattend_scaled = ne.evaluate('SFRDbox_Lagrangian_flattened * (1+density)')
 
-        self.SFRD_box = SFRDbox_flattend_scaled.reshape(Nbox,Nbox,Nbox)
+        self.SFRD_box = SFRDbox_flattend_scaled.reshape(self.ncells,self.ncells,self.ncells)
 
         # ---- #
         # LIM box
-        integrand_LIM = EPS_HMF_corr * HMF_curr * LineLuminosity(SFRtab_currII, Line_Parameters, Astro_Parameters, Cosmo_Parameters, HMF_interpolator, mArray, self.z)  * HMF_interpolator.Mhtab[:,np.newaxis]
+        integrand_LIM = EPS_HMF_corr * HMF_curr * CoeffStructure.LineLuminosity(SFRtab_currII, CosmoParams, AstroParams, LineParams, HMFinterp, mArray, self.input_z)  * HMFinterp.Mhtab[:,np.newaxis]
 
-        rhoLbox_flattened = np.trapezoid(integrand_LIM, HMF_interpolator.logtabMh, axis = 0) 
+        rhoLbox_flattened = np.trapezoid(integrand_LIM, HMFinterp.logtabMh, axis = 0) 
 
         rhoLbox_Lagrangian_flattened = ne.evaluate('rhoLbox_flattened')
          
-        rhoLbox_flattend_scaled = ne.evaluate('rhoLbox_Lagrangian_flattened * (1+density_box)')
+        rhoLbox_flattend_scaled = ne.evaluate('rhoLbox_Lagrangian_flattened * (1+density)')
 
-        self.rhoL_box = rhoLbox_flattend_scaled.reshape(Nbox,Nbox,Nbox)
+        self.rhoL_box = rhoLbox_flattend_scaled.reshape(self.ncells,self.ncells,self.ncells)
 
         # get observed box 
-        self.Inu_box_noiseless = self.rhoL_box * LIM_coeff.coeff1_LIM[_iz] 
+        self.Inu_box_noiseless = self.rhoL_box * CoeffStructure.coeff1_LIM[_iz] 
 
         # create shot noise box -- SAME AS ANALYTICAL !!! 
-        if Line_Parameters.shot_noise:
+        if LineParams.shot_noise:
 
-            Pshot_interp = lambda k: LIM_coeff.shot_noise[_iz]
+            Pshot_interp = lambda k: CoeffStructure.shot_noise[_iz]
 
             pb_shot = pbox.PowerBox(
-                N=self.Nbox,                     
+                N=self.ncells,                     
                 dim=3,                     
                 pk = lambda k: Pshot_interp(k), 
-                boxlength = self.Lbox,           
+                boxlength = self.input_boxlength,           
                 seed = self.seed+3, # uncorrelated from the density field
             )
 
@@ -255,7 +297,7 @@ class CoevalBox_percell:
         self.Inu_box = self.Inu_box_noiseless + self.shotnoise_box
 
         # smooth the box over R 
-        klistfftx = np.fft.fftfreq(self.Inu_box.shape[0],Lbox/Nbox)*2*np.pi
+        klistfftx = np.fft.fftfreq(self.Inu_box.shape[0],self.input_boxlength/self.ncells)*2*np.pi
         klist3Dfft = np.sqrt(np.sum(np.meshgrid(klistfftx**2, klistfftx**2, klistfftx**2, indexing='ij'), axis=0))
         rhoL_fft = np.fft.fftn(self.rhoL_box)
         Inu_noiseless_fft = np.fft.fftn(self.Inu_box_noiseless)
@@ -265,10 +307,12 @@ class CoevalBox_percell:
         self.Inu_box_noiseless_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, Inu_noiseless_fft))
         self.Inu_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, Inu_fft))
 
-        self.density_box = density_box_3d
-        density_fft = np.fft.fftn(self.density_box)
-        self.density_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, density_fft))
+        density_fft = np.fft.fftn(self.density)
+        self.density_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, density_fft))
 
+"""
+
+TODO : THESE HAVE TO BE FIXED 
 
 def build_lightcone(which_lightcone,
              input_zvals,
@@ -520,22 +564,19 @@ def plot_lightcone(which_lightcone,
     plt.tight_layout()
 
     return 
-
+"""
 
 
 class generate_asym_boxes:
     
     def __init__(self, 
+                CosmoParams, LineParams, 
+                T21coeffs, T21PowerSpectra, 
+                LIMcoeffs, LIMPowerSpectra, 
                 z,
                 Lx, Ly, Lz,
                 Nx, Ny, Nz,
-                T21_coefficients, T21_corr, Power_Spectrum, 
                 massweighted_reio,
-                LIM_coeff, LIM_Power_Spectrum, 
-                Line_Parameters, 
-                Astro_Parameters,
-                HMF_interpolator, ClassyCosmo, Cosmo_Parameters, 
-                RSD,
                 seed=1605, 
                 ):
         
@@ -605,16 +646,16 @@ class generate_asym_boxes:
         delta_k_LIM_shotnoise = np.zeros((Nx, Ny, Nz//2 + 1), dtype=np.complex64)
 
         # first let us produce the LIM box
-        zlist = LIM_coeff.zintegral 
+        zlist = LIMcoeffs.zintegral 
         _iz = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
         self.z = zlist[_iz]
-        self.Inu_bar = LIM_coeff.Inu_bar[_iz]
-        klist = LIM_Power_Spectrum.klist_PS
+        self.Inu_bar = LIMcoeffs.Inu_bar[_iz]
+        klist = LIMPowerSpectra.klist_PS
 
-        if RSD == 0:
-            Pnu = LIM_Power_Spectrum._Pk_LIM[_iz,:] / self.Inu_bar**2
+        if LIMPowerSpectra.RSD_MODE == 0:
+            Pnu = LIMPowerSpectra._Pk_LIM[_iz,:] / self.Inu_bar**2
         else:
-            Pnu = LIM_Power_Spectrum._Pk_LIM_RSD[_iz,:] / self.Inu_bar**2
+            Pnu = LIMPowerSpectra._Pk_LIM_RSD[_iz,:] / self.Inu_bar**2
 
         Pnu_interp = interp1d(klist,Pnu,fill_value=0.0,bounds_error=False)
 
@@ -665,16 +706,16 @@ class generate_asym_boxes:
         self.Inu_box_noiseless = np.exp(g - np.var(g)/2) * self.Inu_bar
 
         # shot noise
-        if Line_Parameters.shot_noise:
+        if LineParams.shot_noise:
 
-            Pshot_interp = LIM_coeff.shot_noise[_iz]
+            Pshot_interp = LIMcoeffs.shot_noise[_iz]
 
             a = rng_shot.normal(size=(Nx, Ny, Nz//2+1))
             b = rng_shot.normal(size=(Nx, Ny, Nz//2+1))
             delta_k_LIM_shotnoise = np.sqrt(Pshot_interp * self.Ntot**2 / (2.0 * V)) * (a + 1j*b)
             delta_k_LIM_shotnoise[0,0,0] = 0
             self.shotnoise_box = np.fft.irfftn(delta_k_LIM_shotnoise, s=(Nx,Ny,Nz))
-            self.shotnoise_box += LIM_coeff.shot_noise[_iz]
+            self.shotnoise_box += LIMcoeffs.shot_noise[_iz]
 
         else:
             self.shotnoise_box = np.zeros_like(self.Inu_box_noiseless)
@@ -686,33 +727,34 @@ class generate_asym_boxes:
         # now the xH box 
         # ---------------------------------------------- #
 
-        BMF_val = BMF(T21_coefficients, HMF_interpolator, Cosmo_Parameters, Astro_Parameters, ClassyCosmo, R_linear_sigma_fit_input=10, FLAG_converge=True, max_iter=10, ZMAX_REION = 30,Rmin=0.05)
-
         self.r_precision = 1.
         self.dx21 = max(dx,dy,dz) # !!!!!!!!!!!!!!!!!!!!!!!!!
         self.boxlength21 = min(Lx, Ly, Lz) # !!!!!!!!!!!!!!!!!!!!!!!!!
-        default_len = len(T21_coefficients.Rtabsmoo)
+        default_len = len(CosmoParams._Rtabsmoo)
         self.z_21 = np.atleast_1d(z) 
         self._z21_idx = np.arange(len(np.atleast_1d(z))) #z21_utilities.find_nearest_idx(CoeffStructure.zintegral, self.input_z)
         self.z_of_density = self.z_21[0]
 
-        self.r = np.logspace(np.log10(self.dx21 * (3/4/np.pi)**(1/3))/ T21_coefficients.Rtabsmoo[0], np.log10(self.boxlength21), int(default_len*self.r_precision))
+        self.r = np.logspace(np.log10(self.dx * (3/4/np.pi)**(1/3)), np.log10(self.boxlength21), int(default_len*self.r_precision))
+
         self._r_idx = np.arange(int(default_len*self.r_precision))
 
-        self.density = self.generate_density(ClassyCosmo, T21_corr)
+        self.density = self.generate_density(CosmoParams)
         self.density_allz = np.empty((len(self.z_21), self.Nx, self.Ny, self.Nz), dtype=np.float32)
-        self.generate_density_allz(Cosmo_Parameters)
+        self.generate_density_allz(CosmoParams)
         self._k21 = self.compute_k() 
         self.density_smoothed_allr = self.smooth_density()
 
-        self.barrier = np.array([BMF_val.B(z, self.r) for z in self.z_21]) #BMF linear barrier
+        self.barrier = T21coeffs.B(self.z_21, self.r) #BMF linear barrier
 
-        self.ion_field_allz, self.ion_frac_full = self.generate_xHII(Cosmo_Parameters)
+        self.ion_field_allz, self.ion_frac = self.generate_xHII(CosmoParams)
 
-        self.compute_partial(BMF_val)
+        self._has_p = False
+        self.compute_partial(CosmoParams, T21coeffs)
+
         if massweighted_reio:
 
-            self.compute_partial_massweighted(Cosmo_Parameters,BMF_val,r=None)
+            self.compute_partial_massweighted(CosmoParams, T21coeffs)
 
             reionization_map_partial = self.ion_field_partial_massweighted_allz
             ion_frac_withpartial = self.ion_frac_partial_massweighted
@@ -732,44 +774,45 @@ class generate_asym_boxes:
         # now the 21cm box 
         # ---------------------------------------------- #
 
-        zlist = T21_coefficients.zintegral 
+        zlist = T21coeffs.zintegral 
         _iz21 = min(range(len(zlist)), key=lambda i: np.abs(zlist[i]-z)) #pick closest z
 
-        self.T21global_noR = T21_coefficients.T21avg_noR[_iz21] 
-
-        klist21 = Power_Spectrum.klist_PS
+        klist21 = T21PowerSpectra.klist_PS
         k3over2pi2 = klist21**3/(2*np.pi**2)
 
-        Dsq_T21_lin = Power_Spectrum.Deltasq_T21_lin_noR[_iz21] 
+        self.T21avg =  (T21coeffs.T21avg / T21coeffs.xHI_avg)[_iz]
 
-        Dsq_dT21 = Power_Spectrum.Deltasq_dT21[_iz21]
+        Dsq_T21_lin = ((T21PowerSpectra.Deltasq_T21_lin[_iz].T / T21coeffs.T21avg[_iz]**2) * self.T21avg**2).T
 
-        Dsq_T21 = Power_Spectrum.Deltasq_T21_noR[_iz21]
+        Dsq_T21 = ((T21PowerSpectra.Deltasq_T21[_iz].T / T21coeffs.T21avg[_iz]**2) * self.T21avg**2).T
+        
+        PdT21 = (T21PowerSpectra.Deltasq_dT21[_iz]/T21coeffs.T21avg[_iz])/k3over2pi2
 
-        Pd21_analytical = Power_Spectrum.Deltasq_d_lin[_iz21,:]/k3over2pi2
-        Pd21_spl = interp1d(np.log(klist21),
-                    np.log(Pd21_analytical),
+        Pd = (T21PowerSpectra.Deltasq_d_lin[_iz,:]/T21coeffs.T21avg[_iz])/k3over2pi2
+
+        Pd_spl = interp1d(np.log(klist21),
+                    np.log(PdT21),
                     bounds_error=False,
                     fill_value=0.0)
         
         a = rng.normal(size=(self.Nx, self.Ny, self.Nz//2 + 1))
         b = rng.normal(size=(self.Nx, self.Ny, self.Nz//2 + 1))
 
-        Pd21 = Pd21_spl(np.log(k))
+        Pdv = Pd_spl(np.log(k))
         
-        delta_k_dens_forT21 = np.sqrt(np.exp(Pd21) * self.Ntot**2 / (2.0 * V)) * (a + 1j*b)
+        delta_k_dens_forT21 = np.sqrt(np.exp(Pdv) * self.Ntot**2 / (2.0 * V)) * (a + 1j*b)
         delta_k_dens_forT21[0,0,0] = 0
 
-        PdT21 = Dsq_dT21/k3over2pi2
-        powerratio_spl = spline(klist, PdT21/Pd21_analytical)
+        powerratio_spl = spline(klist, PdT21/Pd)
                             
         powerratio = powerratio_spl(k)
         T21lin_k = powerratio * delta_k_dens_forT21
-        self.T21maplin= self.T21global_noR + np.fft.irfftn(T21lin_k, s=(self.Nx,self.Ny,self.Nz)).astype( dtype=np.float32)
+
+        self.T21maplin= self.T21avg + np.fft.irfftn(T21lin_k, s=(self.Nx,self.Ny,self.Nz)).astype( dtype=np.float32)
         
         excesspower21 = (Dsq_T21-Dsq_T21_lin)/k3over2pi2
 
-        lognormpower = interp1d(klist21,excesspower21/self.T21global_noR**2,fill_value=0.0,bounds_error=False)
+        lognormpower = interp1d(klist21,excesspower21/self.T21avg*2,fill_value=0.0,bounds_error=False)
 
         # Evaluate input power spectrum
         P_ln21 = lognormpower(k)
@@ -798,7 +841,7 @@ class generate_asym_boxes:
 
         delta_T21  = np.exp(g21) - 1.
         
-        self.T21mapNL = self.T21global_noR * delta_T21 
+        self.T21mapNL = self.T21avg * delta_T21 
 
         #and finally, just add them together!
         self.T21_map_only =  self.T21maplin + self.T21mapNL  
@@ -810,8 +853,7 @@ class generate_asym_boxes:
     # ---------------------------------------------- #
 
     def generate_xHII(self, CosmoParams):
-
-        ion_field_allz = np.zeros((len(self.z_21),self.Nx,self.Ny,self.Nz))
+        ion_field_allz = np.zeros((len(self.z_21),self.Nx,self.Ny,self.Nz))     
         ion_frac = np.zeros(len(self.z_21))
 
         iterator = range(len(self.z_21))
@@ -824,26 +866,29 @@ class generate_asym_boxes:
 
         return ion_field_allz, ion_frac
 
-    def ionize(self, CosmoParams, curr_z_idx):
-        zlist = self.z_21 
+    def ionize(self,CosmoParams, curr_z_idx):
+
+        Dg0 = CosmoParams.growthint(self.z_21[0])
+        Dg = CosmoParams.growthint(self.z_21[curr_z_idx])
+        Dg0_Dg = Dg0/Dg
+        ion_field = np.any(self.density_smoothed_allr > (Dg0_Dg)*self.barrier[curr_z_idx, self._r_idx][:, None, None, None], axis=0)
+
+        #Earlier versions of this code contained a spherize method in addition to this central pixel flagging, where spheres are ionized instead of just the central pixel. We found that central pixel flagging is generally more consistent with the bubble mass function than spherizing, so future versions will not include this.
         
-        Dg0 = CosmoParams.growthint(zlist[0])
-        Dg = CosmoParams.growthint(zlist[curr_z_idx])
-
-        ion_field = np.any(self.density_smoothed_allr > (Dg0/Dg)*self.barrier[curr_z_idx, self._r_idx][:, None, None, None], axis=0)
-
         return ion_field
 
-    def generate_density(self, ClassyCosmo, CorrFClass):
+    def generate_density(self, CosmoParams):
 
         #Generating matter power spectrum at the lowest redshift
-        klist = CorrFClass._klistCF
+        klist = CosmoParams._klistCF
         pk_matter = np.zeros_like(klist)
         for i, k in enumerate(klist):
-            pk_matter[i] = ClassyCosmo.pk(k, self.z_of_density)
+            pk_matter[i] = CosmoParams.ClassCosmo.pk(k, self.z_of_density)
         pk_spl = spline(np.log(klist), np.log(pk_matter))
     
         #generating density map
+
+       #generating density map
         # draw Gaussian modes
         rng = np.random.default_rng(self.seed)
 
@@ -864,7 +909,6 @@ class generate_asym_boxes:
 
         return density_field
 
-
     def generate_density_allz(self, CosmoParams):
 
         Dg = CosmoParams.growthint(self.z_21)
@@ -872,6 +916,8 @@ class generate_asym_boxes:
         density_lastz = np.copy(self.density)
         self.density_allz = density_lastz[np.newaxis]*growthfactor_ratio
 
+        self._has_density = True
+            
         return self.density_allz
 
     def compute_k(self):
@@ -889,42 +935,50 @@ class generate_asym_boxes:
 
         return density_smoothed_allr
 
-    def compute_partial(self, BMF, r=None):
-        
+
+    def compute_partial(self, CosmoParams, CoeffStructure, r=None):
         if r is None:
             r = self.r[0]
-
-        self.ion_frac_partial = np.empty(len(self.z_21))
-        self.ion_field_partial_allz = np.empty_like(self.ion_field_allz)
-
+        if not self._has_p:
+            self.ion_frac_partial = np.empty(len(self.z_21))
+            self.ion_field_partial_allz = np.empty_like(self.ion_field_allz)
+        if not self._has_density:
+            self.generate_density_allz(CosmoParams)
         sample_d = np.linspace(-5, 5, 51)
 
+        out_shape = self.density.shape
         iterator = range(len(self.z_21))
         for i in iterator:
-            partial_ion_spl = spline(sample_d, BMF.prebarrier_xHII_int_grid(sample_d, self.z_21[i], r)) #spline is faster than RGI, so build a spline on sample densities
+            tempgrid = CoeffStructure.prebarrier_xHII_int_grid(sample_d, self.z_21[i], r)
             
-            partialfield = np.abs(partial_ion_spl(self.density_allz[i]))
-            sumfield = self.ion_field_allz[i] + partialfield
-            self.ion_field_partial_allz[i] = np.clip(sumfield, 0, 1)
+            partialfield = np.interp(self.density.ravel(), sample_d, tempgrid).reshape(out_shape)
+            
+            np.abs(partialfield, out=partialfield)#abs just in case, but it never actually triggers afaik
+            np.add(self.ion_field_allz[i], partialfield, out=self.ion_field_partial_allz[i])
+            np.clip(self.ion_field_partial_allz[i], 0, 1, out=self.ion_field_partial_allz[i])
 
         self.ion_frac_partial = np.average(self.ion_field_partial_allz, axis=(1, 2, 3))
+
+        self._has_p = True
             
         return self.ion_frac_partial, self.ion_field_partial_allz
     
-    def compute_partial_massweighted(self, CosmoParams, BMF, r=None):
+    def compute_partial_massweighted(self, CosmoParams, CoeffStructure, r=None):
+        if not self._has_p:
+            self.compute_partial(CosmoParams, CoeffStructure, r)
 
-        self.ion_frac_partial_massweighted = np.empty(len(self.z_21))
-        self.ion_field_partial_massweighted_allz = np.empty_like(self.ion_field_allz)
+        if not self._has_mwp:
+            self.ion_frac_partial_massweighted = np.empty(len(self.z_21))
+            self.ion_field_partial_massweighted_allz = np.empty_like(self.ion_field_allz)
 
         iterator = range(len(self.z_21))
         for i in iterator:
             self.ion_field_partial_massweighted_allz[i] = (1+self.density_allz[i]) * self.ion_field_partial_allz[i]
-        
 
         iterator = range(len(self.z_21))
         for i in iterator:
             self.ion_frac_partial_massweighted[i] = np.average(self.ion_field_partial_massweighted_allz[i])
         
+        self._has_mwp = True
+        
         return self.ion_frac_partial_massweighted, self.ion_field_partial_massweighted_allz
-
-

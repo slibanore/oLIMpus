@@ -1,5 +1,5 @@
 
-print('oLIMpus_v2 version June 14, 2026')
+print('oLIMpus_v2 version June 15, 2026')
 from zeus21 import * 
 from .inputs_LIM import * 
 from .luminosities_LIM import * 
