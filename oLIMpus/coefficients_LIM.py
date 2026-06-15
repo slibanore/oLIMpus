@@ -52,7 +52,7 @@ class get_LIM_coefficients:
         self.USE_POPIII = AstroParams.USE_POPIII 
 
         # compute sigmaR for the required resolution and redshift array
-        self.sigmaofRtab_LIM = np.array([HMFinterp.sigmaR_int(Line_Parameters._R, zz) for zz in self.z_Init.zintegral]).T[0]
+        self.sigmaofRtab_LIM = np.array([HMFinterp.sigmaR_int(LineParams._R, zz) for zz in self.z_Init.zintegral]).T[0]
 
         # compute the average luminosity density in Lagrangian space
         zLIM_longer = np.geomspace(UserParams.zmin, constants.zmax_AstroBreak, 128) #e xtend to z = constants.zmax_AstroBreak for extrapolation purposes
