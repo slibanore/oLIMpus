@@ -225,7 +225,7 @@ class Power_Spectra_LIM:
 
             if LineParams_cross is not None:
 
-                windowR2_cross = z21_utilities.Window(self.WINDOWTYPE, CosmoParams._klistCF, LineParams_cross._R) # only one value for the resolution but defined for array on the ks
+                windowR2_cross = z21_utilities.Window(CosmoParams._klistCF, LineParams_cross._R,self.WINDOWTYPE, ) # only one value for the resolution but defined for array on the ks
                 _Pksmooth_cross = np.array(CosmoParams._PklinCF) * windowR2_cross
 
                 self.rlist_CF, xi_R20_CF_cross = CosmoParams._xif(_Pksmooth, extrap = False) 
