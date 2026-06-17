@@ -239,8 +239,8 @@ Yang21_CO21_params = {
 
 # CO 1-0 transition
 Li16_C010_params = {
-    'alpha':1.11,
-    'beta':0.6,
+    'alpha':1.27,
+    'beta':-1.,
     'dMF':1.,
     'L0':4.9e-5,
     'sigma_SFR':0.3*u.dex
@@ -249,3 +249,39 @@ Li16_C010_params = {
 Yang21_CO10_params = {
     'A':1.
 }
+
+# COMAP fiducial 
+# generic CO line
+
+COMAP_pessimistic_params = {
+    'A': -3.7, 
+    'B': 7.0, 
+    'C': 11.1, 
+    'Ms': 12.5, 
+    'sigma': 0.36
+}
+
+COMAP_realistic_params = {
+    'A': -2.75, 
+    'B': 0.05, 
+    'C': 10.61, 
+    'Ms': 12.3, 
+    'sigma': 0.42
+}
+
+COMAP_realisticplus_params = {
+    'A': -2.85, 
+    'B': -0.42, 
+    'C': 10.63, 
+    'Ms': 12.3, 
+    'sigma': 0.42
+}
+
+COMAP_optimistic_params = {
+    'A': -2.4, 
+    'B': -0.5, 
+    'C': 10.45, 
+    'Ms': 12.21, 
+    'sigma': 0.36
+}
+

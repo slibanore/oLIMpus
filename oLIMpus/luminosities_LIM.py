@@ -217,13 +217,15 @@ def Li16(line, dotM, line_dict):
 
     alpha = line_dict['alpha']
     beta = line_dict['beta']
-    dMF = line_dict['dMF']
+    #dMF = line_dict['dMF']
     L0 = line_dict['L0']
 
     log10_SFR = np.log10(dotM)
 
     # Eq. 1 
-    L_IR = 10**log10_SFR / (dMF*1e-10)
+    # L_IR = 10**log10_SFR / (dMF*1e-10)
+    # Eq in Kennicutt 1998
+    L_IR = (10**log10_SFR /(u.Msun*u.yr**-1)/4.5e-44*u.erg/u.s).to(u.Lsun)
 
     # Eq. 2
     Lprime = (10.**-beta * L_IR)**(1./alpha)
