@@ -93,7 +93,7 @@ class CoevalBox_LIM_analytical:
         if self.input_density is not None:
             self.density = self.input_density
         else:
-            self.density, pbs = generate_density_pb(CoeffStructure.zintegral, self.input_boxlength, self.ncells, self.seed, self._klist, self._Pd)
+            self.density, pbs = generate_density_pb(_iz, self.input_boxlength, self.ncells, self.seed, self._klist, self._Pd)
 
         if PowerSpectra.RSD_MODE == 0:
             self._Pnu = PowerSpectra._Pk_LIM[_iz,:]
@@ -145,22 +145,21 @@ class CoevalBox_LIM_analytical:
         density_fft = np.fft.fftn(self.density)
         self.density_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, density_fft))
 
-def generate_density_pb(input_z, input_boxlength, ncells, seed, _klist,_Pd):
-    density = np.zeros((len(input_z),ncells,ncells,ncells))
-    pbs = []
-    for iz, z in enumerate(input_z):
-        Pd_spl = spline(np.log(_klist), np.log(_Pd[iz])) # density at min z
-        pb = pbox.PowerBox(
-            N=ncells,
-            dim=3,
-            pk = lambda k: np.exp(Pd_spl(np.log(k))),
-            boxlength = input_boxlength,
-            seed = seed
-        )
-        density[iz] = pb.delta_x()
-        pbs.append(pb)
+def generate_density_pb(iz, input_boxlength, ncells, seed, _klist,_Pd):
 
-    return density, pbs
+    density = np.zeros((ncells,ncells,ncells))
+
+    Pd_spl = spline(np.log(_klist), np.log(_Pd[iz])) # density at min z
+    pb = pbox.PowerBox(
+        N=ncells,
+        dim=3,
+        pk = lambda k: np.exp(Pd_spl(np.log(k))),
+        boxlength = input_boxlength,
+        seed = seed
+        )
+    density = pb.delta_x()
+
+    return density, pb
 
 
 @dataclass()
@@ -215,9 +214,9 @@ class CoevalBox_percell:
         if self.input_density is not None:
             self.density = self.input_density
         else:
-            self.density, pbs = generate_density_pb(CoeffStructure.zintegral, self.input_boxlength, self.ncells, self.seed, self._klist, self._Pd)
+            self.density, pbs = generate_density_pb(_iz, self.input_boxlength, self.ncells, self.seed, self._klist, self._Pd)
 
-        density = self.density[_iz].flatten()
+        density = self.density.flatten()
 
         # compute the local dndM through EPS and HMF
         deltaArray = ne.evaluate('density')

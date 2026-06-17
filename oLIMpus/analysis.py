@@ -2,7 +2,7 @@ from oLIMpus import *
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from zeus21.inputs import User_Parameters, Cosmo_Parameters, Astro_Parameters
-from zeus21 import T21coefficients, correlations
+from zeus21 import T21coefficients, correlations, Z_init, SFRD_class
 from oLIMpus.inputs_LIM import Line_Parameters
 from copy import copy 
 
@@ -54,6 +54,7 @@ AstroParams_inputs = dict(
         Mturn_fixed = None,
         dlog10epsstardz = 0.0,
         quadratic_SFRD_lognormal = True, 
+        USE_LW_FEEDBACK = False,
 
         fesc10 = 0.1,
         alphaesc = 0., 
@@ -120,13 +121,17 @@ class run_oLIMpus:
             line_dict= line_dict # parameters that enter the L-SFR or L-Mh relation
         )
         
+        print('...Initiating SFRD class...')
+        self.z_Init = Z_init(UserParams=self.UP, CosmoParams=self.CP) 
+        self.SFRD_Init = SFRD_class(UserParams=self.UP, CosmoParams=self.CP, AstroParams=self.AP, HMFinterp=self.HMFcl, z_Init=self.z_Init) 
+
         print('...Running Line...')
-        self.LIMcoeff = coefficients_LIM.get_LIM_coefficients(self.UP,self.CP,self.AP,self.LP,self.HMFcl)
+        self.LIMcoeff = coefficients_LIM.get_LIM_coefficients(self.UP,self.CP,self.AP,self.LP,self.HMFcl,z_Init=self.z_Init,SFRD_Init=self.SFRD_Init)
 
         self.LIMpk = correlations_LIM.Power_Spectra_LIM(self.UP,self.CP,self.LP,self.LIMcoeff,RSD_MODE=RSD_MODE,SIGMA_FOG=SIGMA_FOG)
 
         print('...Running T21...')
-        self.T21coeff = T21coefficients.get_T21_coefficients(self.UP,self.CP,self.AP,self.HMFcl)
+        self.T21coeff = T21coefficients.get_T21_coefficients(self.UP,self.CP,self.AP,self.HMFcl, z_Init=self.z_Init,SFRD_Init=self.SFRD_Init)
 
         self.T21pk = correlations.Power_Spectra(self.UP,self.CP,self.AP,self.T21coeff, RSD_MODE=RSD_MODE)
 

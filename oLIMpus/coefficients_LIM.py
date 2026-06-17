@@ -45,10 +45,14 @@ class get_LIM_coefficients:
         if z_Init is None:
             # to perform cross-correlation studies, the redshift array has to be the same as in zeus21
             self.z_Init = Z_init(UserParams=UserParams, CosmoParams=CosmoParams) 
+        else:
+            self.z_Init = z_Init
 
         if SFRD_Init is None:
             self.SFRD_Init = SFRD_class(UserParams, CosmoParams, AstroParams, HMFinterp, self.z_Init) 
-
+        else: 
+            self.SFRD_Init = SFRD_Init
+            
         self.USE_POPIII = AstroParams.USE_POPIII 
 
         # compute sigmaR for the required resolution and redshift array

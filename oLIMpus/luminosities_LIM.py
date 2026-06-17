@@ -10,9 +10,13 @@ BGU - June 2026
 from oLIMpus.inputs_LIM import * 
 
 # powerlaw to scale the SFR
-def powerlaw(line, dotM, line_dict):
+def powerlaw_SFR(line, dotM, line_dict):
 
-    L = dotM**line_dict['alpha_SFR']
+    try: 
+        L = (line_dict['A_SFR'] * (dotM / (u.Msun / u.yr))**line_dict['alpha_SFR']).to(u.Lsun)
+    except:
+        L = (line_dict['A_SFR'] * dotM**line_dict['alpha_SFR'])
+
     log10_L = np.log10(L)
     log10_L[np.isnan(log10_L)] = 0.    
     log10_L[np.isinf(abs(log10_L))] = 0.    
