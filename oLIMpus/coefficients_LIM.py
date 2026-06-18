@@ -275,7 +275,7 @@ class get_LIM_coefficients:
             log10_L = getattr(L,LineParams.LINE_MODEL)(LineParams.LINE, dotM, z, LineParams.line_dict)
         else:
             try:
-                log10_L = getattr(L,LineParams.LINE_MODEL)(LineParams.LINE, dotM, LineParams.line_dict)
+                log10_L = getattr(L, LineParams.LINE_MODEL)(LineParams.LINE, dotM, LineParams.line_dict)
             except:
                 print('\nLINE MODEL NOT IMPLEMENTED')
                 return -1

@@ -641,7 +641,6 @@ class generate_asym_boxes:
         self.kz = kz
 
         # allocate Fourier field (half-complex storage)
-        delta_k_LIM_noiseless = np.zeros((Nx, Ny, Nz//2 + 1), dtype=np.complex64)
         delta_k_LIM_shotnoise = np.zeros((Nx, Ny, Nz//2 + 1), dtype=np.complex64)
 
         # first let us produce the LIM box
@@ -683,13 +682,13 @@ class generate_asym_boxes:
         P_ln_full[0,0,0] = 0
 
         # Step 2: xi_ln via fftn (no half-plane ambiguity)
-        xi_ln = np.fft.ifftn(P_ln_full).real * (self.Ntot / V)
+        xi_ln = np.fft.ifftn(P_ln_full).real * (self.Ntot / self.V)
 
         # Step 3: lognormal correction entirely in real space
         xi_g  = np.log(1.0 + xi_ln)
 
         # Step 4: back to k-space with fftn (full grid)
-        P_g_full = np.fft.fftn(xi_g).real * (V / self.Ntot)
+        P_g_full = np.fft.fftn(xi_g).real * (self.V / self.Ntot)
         P_g_full[P_g_full < 0] = 0
 
         # Step 5: draw modes on full grid
@@ -698,7 +697,7 @@ class generate_asym_boxes:
 
         a = rng.normal(size=(Nx, Ny, Nz//2+1))
         b = rng.normal(size=(Nx, Ny, Nz//2+1))
-        delta_k = np.sqrt(P_g_half * self.Ntot**2 / (2.0 * V)) * (a + 1j*b)
+        delta_k = np.sqrt(P_g_half * self.Ntot**2 / (2.0 * self.V)) * (a + 1j*b)
         delta_k[0,0,0] = 0
         g = np.fft.irfftn(delta_k, s=(Nx,Ny,Nz))
 
@@ -711,7 +710,7 @@ class generate_asym_boxes:
 
             a = rng_shot.normal(size=(Nx, Ny, Nz//2+1))
             b = rng_shot.normal(size=(Nx, Ny, Nz//2+1))
-            delta_k_LIM_shotnoise = np.sqrt(Pshot_interp * self.Ntot**2 / (2.0 * V)) * (a + 1j*b)
+            delta_k_LIM_shotnoise = np.sqrt(Pshot_interp * self.Ntot**2 / (2.0 * self.V)) * (a + 1j*b)
             delta_k_LIM_shotnoise[0,0,0] = 0
             self.shotnoise_box = np.fft.irfftn(delta_k_LIM_shotnoise, s=(Nx,Ny,Nz))
             self.shotnoise_box += LIMcoeffs.shot_noise[_iz]
@@ -726,23 +725,28 @@ class generate_asym_boxes:
         # now the xH box 
         # ---------------------------------------------- #
 
+        default_len = len(CosmoParams._Rtabsmoo)
         self.r_precision = 1.
+
         self.dx21 = max(dx,dy,dz) # !!!!!!!!!!!!!!!!!!!!!!!!!
         self.boxlength21 = min(Lx, Ly, Lz) # !!!!!!!!!!!!!!!!!!!!!!!!!
-        default_len = len(CosmoParams._Rtabsmoo)
+
+        self.r = np.logspace(np.log10(self.dx21 * (3/4/np.pi)**(1/3)), np.log10(self.boxlength21), int(default_len*self.r_precision))
+        self._r_idx = np.arange(int(default_len*self.r_precision))
+        
         self.z_21 = np.atleast_1d(z) 
         self._z21_idx = np.arange(len(np.atleast_1d(z))) #z21_utilities.find_nearest_idx(CoeffStructure.zintegral, self.input_z)
         self.z_of_density = self.z_21[0]
 
-        self.r = np.logspace(np.log10(self.dx * (3/4/np.pi)**(1/3)), np.log10(self.boxlength21), int(default_len*self.r_precision))
-
-        self._r_idx = np.arange(int(default_len*self.r_precision))
-
-        self.density = self.generate_density(CosmoParams)
-        self.density_allz = np.empty((len(self.z_21), self.Nx, self.Ny, self.Nz), dtype=np.float32)
-        self.generate_density_allz(CosmoParams)
         self._k21 = self.compute_k() 
+
+        delta_k_dens_forT21, self.density = self.generate_density(CosmoParams)
+        self.sig_corr = self.sigma_correction(CosmoParams)
+        self.density /= self.sig_corr #non-ergodicity correction
+
         self.density_smoothed_allr = self.smooth_density()
+
+        self.generate_density_allz(CosmoParams)
 
         self.barrier = T21coeffs.B(self.z_21, self.r) #BMF linear barrier
 
@@ -763,9 +767,8 @@ class generate_asym_boxes:
             ion_frac_withpartial = self.ion_frac_partial
 
         self.ion_frac = ion_frac_withpartial
-        self.xH_avg_map = 1. - self.ion_frac
+        self.xH_avg_map = 1. - self.ion_frac_partial
             
-        self.xHI_box = reionization_map_partial[0]
         self.xH_box = 1. - reionization_map_partial[0]
         self.xH_box[np.isnan(self.xH_box)] = 0.
 
@@ -779,77 +782,65 @@ class generate_asym_boxes:
         klist21 = T21PowerSpectra.klist_PS
         k3over2pi2 = klist21**3/(2*np.pi**2)
 
-        self.T21avg =  (T21coeffs.T21avg / T21coeffs.xHI_avg)[_iz]
+        self.T21avg = (T21coeffs.T21avg / (T21coeffs.xHI_avg + 1e-15))[_iz21]
 
-        Dsq_T21_lin = ((T21PowerSpectra.Deltasq_T21_lin[_iz].T / T21coeffs.T21avg[_iz]**2) * self.T21avg**2).T
-
-        Dsq_T21 = ((T21PowerSpectra.Deltasq_T21[_iz].T / T21coeffs.T21avg[_iz]**2) * self.T21avg**2).T
+        Dsq_T21_lin = ((T21PowerSpectra.Deltasq_T21_lin[_iz21].T / T21coeffs.T21avg[_iz21]**2) * self.T21avg**2).T
+        Dsq_T21 = ((T21PowerSpectra.Deltasq_T21[_iz21].T / T21coeffs.T21avg[_iz21]**2) * self.T21avg**2).T
         
-        PdT21 = (T21PowerSpectra.Deltasq_dT21[_iz]/T21coeffs.T21avg[_iz])/k3over2pi2
+        PdT21 = (T21PowerSpectra.Deltasq_dT21[_iz21]/T21coeffs.T21avg[_iz21]) * self.T21avg / k3over2pi2
+        Pd = (T21PowerSpectra.Deltasq_d_lin[_iz21,:])/k3over2pi2
 
-        Pd = (T21PowerSpectra.Deltasq_d_lin[_iz,:]/T21coeffs.T21avg[_iz])/k3over2pi2
-
-        Pd_spl = interp1d(np.log(klist21),
-                    np.log(PdT21),
-                    bounds_error=False,
-                    fill_value=0.0)
-        
-        a = rng.normal(size=(self.Nx, self.Ny, self.Nz//2 + 1))
-        b = rng.normal(size=(self.Nx, self.Ny, self.Nz//2 + 1))
-
-        Pdv = Pd_spl(np.log(k))
-        
-        delta_k_dens_forT21 = np.sqrt(np.exp(Pdv) * self.Ntot**2 / (2.0 * V)) * (a + 1j*b)
         delta_k_dens_forT21[0,0,0] = 0
 
-        powerratio_spl = spline(klist, PdT21/Pd)
+        powerratio_spl = spline(klist, PdT21 / Pd)
                             
         powerratio = powerratio_spl(k)
         T21lin_k = powerratio * delta_k_dens_forT21
 
-        self.T21maplin= self.T21avg + np.fft.irfftn(T21lin_k, s=(self.Nx,self.Ny,self.Nz)).astype( dtype=np.float32)
-        
+        self.T21_lin = self.T21avg + np.fft.irfftn(T21lin_k, s=(self.Nx,self.Ny,self.Nz)).astype( dtype=np.float32)
+
         excesspower21 = (Dsq_T21-Dsq_T21_lin)/k3over2pi2
 
-        lognormpower = interp1d(klist21,excesspower21/self.T21avg*2,fill_value=0.0,bounds_error=False)
+        lognormpower = interp1d(klist21,excesspower21/self.T21avg**2,fill_value=0.0,bounds_error=False)
 
-        # Evaluate input power spectrum
-        P_ln21 = lognormpower(k)
+        a = rng_nl.normal(size=(self.Nx, self.Ny, self.Nz//2 + 1))
+        b = rng_nl.normal(size=(self.Nx, self.Ny, self.Nz//2 + 1))
 
-        if (dx != dy) or (dx != dz) or (dy != dz):
-            P_ln21[k > k_cut] = 0
-
-        xi_ln21 = np.fft.ifftn(P_ln21).real * (self.Ntot / V)
-
-        # Step 3: lognormal correction entirely in real space
-        xi_g21  = np.log(1.0 + xi_ln21)
-
-        # Step 4: back to k-space with fftn (full grid)
-        P_21_full = np.fft.fftn(xi_g21).real * (V / self.Ntot)
-        P_21_full[P_21_full < 0] = 0
-
-        # Step 5: draw modes on full grid
-        # Take the rfft slice of P_g_full
-        P_21_half = P_21_full[:, :, :Nz//2+1]
-
-        a21 = rng_nl.normal(size=(Nx, Ny, Nz//2+1))
-        b21 = rng_nl.normal(size=(Nx, Ny, Nz//2+1))
-        delta_k_21 = np.sqrt(P_21_half * self.Ntot**2 / (2.0 * V)) * (a21 + 1j*b21)
-        delta_k_21[0,0,0] = 0
-        g21 = np.fft.irfftn(delta_k_21, s=(Nx,Ny,Nz))
-
-        delta_T21  = np.exp(g21) - 1.
+        delta_k_21 = (a + 1j*b)
+        delta_k_21 *= np.sqrt(lognormpower(k) * self.Ntot**2 / (2. * V ))
+        delta_k_21[0,0,0] = 0.0
         
-        self.T21mapNL = self.T21avg * delta_T21 
+        g21 = np.fft.irfftn(delta_k_21, s=(self.Nx, self.Ny, self.Nz))
+        delta_T21 = np.exp(g21 - 0.5 * np.var(g21)) - 1.0
+      
+        self.T21_NL = self.T21avg * delta_T21 
 
         #and finally, just add them together!
-        self.T21_map_only =  self.T21maplin + self.T21mapNL  
+        self.T21 = self.T21_lin + self.T21_NL
 
-        self.T21_map = self.T21_map_only * self.xH_box
+        self.T21 = self.T21 * self.xH_box
+        self.T21[np.isnan(self.T21)] = 0.
 
     # ---------------------------------------------- #
     # required functions 
     # ---------------------------------------------- #
+
+    def sigma_correction(self, CosmoParams):
+        """ 
+        Computes the non-ergodicity correction to the generated density variance. 
+        
+        Parameters 
+        ---------- 
+        CosmoParams : CosmoParams class 
+        
+        Returns 
+        ------- 
+        sigma_ratio : float 
+            Ratio between the measured and theoretical sigma. 
+        """
+        sigma_ratio = np.std(self.density)/CosmoParams.ClassCosmo.sigma(self.r[0], self.z_of_density)
+        return sigma_ratio
+
 
     def generate_xHII(self, CosmoParams):
         ion_field_allz = np.zeros((len(self.z_21),self.Nx,self.Ny,self.Nz))     
@@ -877,36 +868,33 @@ class generate_asym_boxes:
         return ion_field
 
     def generate_density(self, CosmoParams):
-
-        #Generating matter power spectrum at the lowest redshift
         klist = CosmoParams._klistCF
         pk_matter = np.zeros_like(klist)
         for i, k in enumerate(klist):
             pk_matter[i] = CosmoParams.ClassCosmo.pk(k, self.z_of_density)
         pk_spl = spline(np.log(klist), np.log(pk_matter))
-    
-        #generating density map
 
-       #generating density map
-        # draw Gaussian modes
         rng = np.random.default_rng(self.seed)
-
         a = rng.normal(size=(self.Nx, self.Ny, self.Nz//2 + 1))
         b = rng.normal(size=(self.Nx, self.Ny, self.Nz//2 + 1))
 
-        kxg, kyg, kzg = np.meshgrid(self.kx,self.ky,self.kz,indexing="ij")
+        # rfftfreq for last axis to match irfftn output shape
+        kx = np.fft.fftfreq(self.Nx, self.dx) * 2*np.pi
+        ky = np.fft.fftfreq(self.Ny, self.dy) * 2*np.pi
+        kz = np.fft.rfftfreq(self.Nz, self.dz) * 2*np.pi  # <-- rfftfreq, not fftfreq
+
+        kxg, kyg, kzg = np.meshgrid(kx, ky, kz, indexing="ij")
         k = np.sqrt(kxg**2 + kyg**2 + kzg**2)
+        k[0, 0, 0] = 1.0  # avoid log(0); will be zeroed out below
 
         P = pk_spl(np.log(k))
-        
-        # delta_k_density = np.sqrt(np.exp(P)*self.V/2) * (a + 1j*b)
+
         delta_k_density = np.sqrt(np.exp(P) * self.Ntot**2 / (2.0 * self.V)) * (a + 1j*b)
-        delta_k_density[0,0,0] = 0
+        delta_k_density[0, 0, 0] = 0.0
 
-        # inverse FFT → real-space Gaussian field
-        density_field = np.fft.irfftn(delta_k_density, s=(self.Nx,self.Ny,self.Nz)).astype( dtype=np.float32)
+        density_field = np.fft.irfftn(delta_k_density, s=(self.Nx, self.Ny, self.Nz)).astype(np.float32)
 
-        return density_field
+        return delta_k_density, density_field
 
     def generate_density_allz(self, CosmoParams):
 

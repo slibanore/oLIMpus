@@ -225,7 +225,7 @@ def Li16(line, dotM, line_dict):
     # Eq. 1 
     # L_IR = 10**log10_SFR / (dMF*1e-10)
     # Eq in Kennicutt 1998
-    L_IR = (10**log10_SFR /(u.Msun*u.yr**-1)/4.5e-44*u.erg/u.s).to(u.Lsun)
+    L_IR = ((10**log10_SFR/4.5e-44*u.erg/u.s).to(u.Lsun)).value
 
     # Eq. 2
     Lprime = (10.**-beta * L_IR)**(1./alpha)

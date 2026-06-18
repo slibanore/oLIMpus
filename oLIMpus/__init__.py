@@ -1,6 +1,11 @@
 
-print('oLIMpus_v2 version June 15, 2026')
+from importlib.metadata import version
+
 from zeus21 import * 
+
+print(f"oLIMpus version {version('oLIMpus')}")
+print(f"zeus21 version {version('zeus21')}")
+
 from .inputs_LIM import * 
 from .luminosities_LIM import * 
 from .coefficients_LIM import * 
