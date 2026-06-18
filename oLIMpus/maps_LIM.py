@@ -63,6 +63,7 @@ class CoevalBox_LIM_analytical:
 
     # boxes
     density: np.ndarray = _field(init=False)
+    smooth_box: bool = _field(default=False)
     density_smooth: np.ndarray = _field(init=False)
     Inu_box_noiseless: np.ndarray = _field(init=False)
     Inu_box_noiseless_smooth: np.ndarray = _field(init=False)
@@ -84,8 +85,6 @@ class CoevalBox_LIM_analytical:
         self._k3over2pi2 = self._klist**3/(2*np.pi**2)
 
         self.Inu_bar = CoeffStructure.Inu_bar[_iz]
-
-        Resolution = max(self.input_Resolution, LineParams._R, self.input_boxlength/self.ncells)
 
         self._Pd = np.outer(PowerSpectra.lin_growth**2, CosmoParams._PklinCF) 
 
@@ -133,12 +132,14 @@ class CoevalBox_LIM_analytical:
         # LIM box with shot noise
         self.Inu_box = self.Inu_box_noiseless + self.shotnoise_box
 
-        # smooth the box over R 
-        self.Inu_box_noiseless_smooth = z21_utilities.smooth_box(self.Inu_box_noiseless, Resolution, self.input_boxlength, self.ncells)
-        
-        self.Inu_box_smooth = z21_utilities.smooth_box(self.Inu_box, Resolution, self.input_boxlength, self.ncells)
-        
-        self.density_smooth = z21_utilities.smooth_box(self.density, Resolution, self.input_boxlength, self.ncells)
+        if self.smooth_box:
+            # smooth the box over R 
+            Resolution = max(self.input_Resolution, LineParams._R, self.input_boxlength/self.ncells)
+            self.Inu_box_noiseless_smooth = z21_utilities.smooth_box(self.Inu_box_noiseless, Resolution, self.input_boxlength, self.ncells)
+            
+            self.Inu_box_smooth = z21_utilities.smooth_box(self.Inu_box, Resolution, self.input_boxlength, self.ncells)
+            
+            self.density_smooth = z21_utilities.smooth_box(self.density, Resolution, self.input_boxlength, self.ncells)
 
 
 def generate_density_pb(iz, input_boxlength, ncells, seed, _klist,_Pd):
@@ -181,6 +182,7 @@ class CoevalBox_percell:
 
     # boxes
     density: np.ndarray = _field(init=False)
+    smooth_box: bool = _field(default=False)
     density_smooth: np.ndarray = _field(init=False)
     SFRD_box: np.ndarray = _field(init=False)
     Inu_box_noiseless: np.ndarray = _field(init=False)
@@ -201,8 +203,6 @@ class CoevalBox_percell:
         self._k3over2pi2 = self._klist**3/(2*np.pi**2)
 
         self.Inu_bar = CoeffStructure.Inu_bar[_iz]
-
-        Resolution = max(self.input_Resolution, LineParams._R, self.input_boxlength/self.ncells)
 
         self._Pd = np.outer(PowerSpectra.lin_growth**2, CosmoParams._PklinCF) 
 
@@ -292,13 +292,17 @@ class CoevalBox_percell:
         self.Inu_box = self.Inu_box_noiseless + self.shotnoise_box
 
         # smooth the box over R 
-        self.rhoL_box_smooth = z21_utilities.smooth_box(self.rhoL_box, Resolution, self.input_boxlength, self.ncells)
-        
-        self.Inu_box_noiseless_smooth = z21_utilities.smooth_box(self.Inu_box_noiseless, Resolution, self.input_boxlength, self.ncells)
+        if self.smooth_box:
 
-        self.Inu_box_smooth = z21_utilities.smooth_box(self.Inu_box, Resolution, self.input_boxlength, self.ncells)
+            Resolution = max(self.input_Resolution, LineParams._R, self.input_boxlength/self.ncells)
 
-        self.density_smooth = z21_utilities.smooth_box(self.density, Resolution, self.input_boxlength, self.ncells)
+            self.rhoL_box_smooth = z21_utilities.smooth_box(self.rhoL_box, Resolution, self.input_boxlength, self.ncells)
+            
+            self.Inu_box_noiseless_smooth = z21_utilities.smooth_box(self.Inu_box_noiseless, Resolution, self.input_boxlength, self.ncells)
+
+            self.Inu_box_smooth = z21_utilities.smooth_box(self.Inu_box, Resolution, self.input_boxlength, self.ncells)
+
+            self.density_smooth = z21_utilities.smooth_box(self.density, Resolution, self.input_boxlength, self.ncells)
 
 """
 
