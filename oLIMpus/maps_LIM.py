@@ -134,16 +134,12 @@ class CoevalBox_LIM_analytical:
         self.Inu_box = self.Inu_box_noiseless + self.shotnoise_box
 
         # smooth the box over R 
-        klistfftx = np.fft.fftfreq(self.Inu_box.shape[0],self.input_boxlength/self.ncells)*2*np.pi
-        klist3Dfft = np.sqrt(np.sum(np.meshgrid(klistfftx**2, klistfftx**2, klistfftx**2, indexing='ij'), axis=0))
-        Inu_noiseless_fft = np.fft.fftn(self.Inu_box_noiseless)
-        Inu_fft = np.fft.fftn(self.Inu_box)
+        self.Inu_box_noiseless_smooth = z21_utilities.smooth_box(self.Inu_box_noiseless, Resolution, self.input_boxlength, self.ncells)
+        
+        self.Inu_box_smooth = z21_utilities.smooth_box(self.Inu_box, Resolution, self.input_boxlength, self.ncells)
+        
+        self.density_smooth = z21_utilities.smooth_box(self.density, Resolution, self.input_boxlength, self.ncells)
 
-        self.Inu_box_noiseless_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, Inu_noiseless_fft))
-        self.Inu_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, Inu_fft))
-
-        density_fft = np.fft.fftn(self.density)
-        self.density_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, density_fft))
 
 def generate_density_pb(iz, input_boxlength, ncells, seed, _klist,_Pd):
 
@@ -296,18 +292,13 @@ class CoevalBox_percell:
         self.Inu_box = self.Inu_box_noiseless + self.shotnoise_box
 
         # smooth the box over R 
-        klistfftx = np.fft.fftfreq(self.Inu_box.shape[0],self.input_boxlength/self.ncells)*2*np.pi
-        klist3Dfft = np.sqrt(np.sum(np.meshgrid(klistfftx**2, klistfftx**2, klistfftx**2, indexing='ij'), axis=0))
-        rhoL_fft = np.fft.fftn(self.rhoL_box)
-        Inu_noiseless_fft = np.fft.fftn(self.Inu_box_noiseless)
-        Inu_fft = np.fft.fftn(self.Inu_box)
+        self.rhoL_box_smooth = z21_utilities.smooth_box(self.rhoL_box, Resolution, self.input_boxlength, self.ncells)
+        
+        self.Inu_box_noiseless_smooth = z21_utilities.smooth_box(self.Inu_box_noiseless, Resolution, self.input_boxlength, self.ncells)
 
-        self.rhoL_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, rhoL_fft))
-        self.Inu_box_noiseless_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, Inu_noiseless_fft))
-        self.Inu_box_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, Inu_fft))
+        self.Inu_box_smooth = z21_utilities.smooth_box(self.Inu_box, Resolution, self.input_boxlength, self.ncells)
 
-        density_fft = np.fft.fftn(self.density)
-        self.density_smooth = np.array(z21_utilities.tophat_smooth(Resolution, klist3Dfft, density_fft))
+        self.density_smooth = z21_utilities.smooth_box(self.density, Resolution, self.input_boxlength, self.ncells)
 
 """
 
@@ -819,7 +810,7 @@ class generate_asym_boxes:
         self.T21 = self.T21_lin + self.T21_NL
 
         self.T21 = self.T21 * self.xH_box
-        self.T21[np.isnan(self.T21)] = 0.
+        self.T21[np.isnan(self.T21)] = 0.        
 
     # ---------------------------------------------- #
     # required functions 
