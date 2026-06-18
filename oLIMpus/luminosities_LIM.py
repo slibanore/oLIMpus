@@ -242,3 +242,21 @@ def Li16(line, dotM, line_dict):
     log10_L = np.log10(L0 * Lprime * scale_nu**3)
 
     return log10_L
+
+
+def COMAP_fiducial(line, massVector, nu_rest, line_dict):
+
+    if 'CO' not in line:
+        print('\nCOMAP model can only be used for CO lines!')
+        return -1
+    
+    
+    A = line_dict['A']
+    B = line_dict['B']
+    C = line_dict['C']
+    Ms = 10.**line_dict['Ms']
+    
+    L = C/((massVector/Ms)**A+(massVector/Ms)**B)
+
+    return (L*4.9e-5*u.Lsun*(nu_rest.to(u.GHz)/(115.27*u.GHz))**3).value
+

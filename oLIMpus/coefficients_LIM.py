@@ -270,7 +270,9 @@ class get_LIM_coefficients:
         # --- #
         # line luminosity computation
         if LineParams.LINE_MODEL == 'Yang21':
-            log10_L = getattr(L,LineParams.LINE_MODEL)(LineParams.LINE, massVector, z, LineParams.line_dict)
+            log10_L = getattr(L,LineParams.LINE_MODEL)(LineParams.LINE, massVector, z, LineParams.line_dict)        
+        elif LineParams.LINE_MODEL == 'COMAP_fiducial':
+            log10_L = getattr(L,LineParams.LINE_MODEL)(LineParams.LINE, massVector, LineParams.nu_rest, LineParams.line_dict)
         elif LineParams.LINE_MODEL == 'Lagache18':
             log10_L = getattr(L,LineParams.LINE_MODEL)(LineParams.LINE, dotM, z, LineParams.line_dict)
         else:
