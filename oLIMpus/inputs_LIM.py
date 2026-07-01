@@ -67,20 +67,31 @@ class Line_Parameters:
     LINE: str = "OIII5007"
     LINE_MODEL: str = "Yang24"
     OBSERVABLE_LIM: str = "Inu"
+    DUST_FLAG: bool = False
+    BURSTY_FLAG: bool = False
 
     _R: float = 0.5
     shot_noise: bool = True
     quadratic_rhoL: bool = True
 
-    stoch_type: str = "median"
-    sigma_LMh: float = 0.
+    stoch_type: str = "mean"
+    sigma_LMh_dex: float = 0.
+    sigPS_piv_bursty: float = 2.
+    log10M_piv_bursty: float = 11
+    sigPS_cap_bursty: float = 0.25
+    dsigPS_dlog10M_bursty: float = -0.5
+    tauPS_Myr_bursty: float = 25.
 
     line_dict: dict = None   
+    t_Myr_per_line: float = _field(init=False)
+    sigma_LMh: float = _field(init=False)
 
     def __post_init__(self):
         schema = {
             "LINE": (str, {"OIII5007", "OIII", "OIII4960", "OIII4364", "OII", "Ha", "Hb", "CII", "CO21", "CO10", "SFRD"}),
             "OBSERVABLE_LIM": (str, {"Inu", "Tnu"}),
+            "DUST_FLAG": (bool, None),
+            "BURSTY_FLAG": (bool, None),
             "shot_noise": (bool, None),
             "quadratic_rhoL": (bool, None),
             "stoch_type": (str, {"mean", "median"}),
@@ -89,26 +100,38 @@ class Line_Parameters:
         
         if self.LINE == 'OIII4960':
             self.lambda_line = 4960*u.AA 
+            self.t_Myr_per_line = 7.
         elif self.LINE == 'OIII5007' or self.LINE == 'OIII':
             self.lambda_line = 5007*u.AA 
+            self.t_Myr_per_line = 7.
         elif self.LINE == 'OII':
             self.lambda_line = 3727.29*u.AA 
+            self.t_Myr_per_line = 7.
         elif self.LINE == 'Ha':
             self.lambda_line = 6563*u.AA
+            self.t_Myr_per_line = 7.
         elif self.LINE == 'Hb':
             self.lambda_line = 4861*u.AA 
+            self.t_Myr_per_line = 7.
 
         elif self.LINE == 'CII':
             self.lambda_line = 1.58e6*u.AA 
+            self.t_Myr_per_line = 50.
 
         elif self.LINE == 'CO21': # 2-1 transition
             self.lambda_line = 1.3e7*u.AA 
+            self.t_Myr_per_line = 80.
         elif self.LINE == 'CO10': # 1-0 transition
             self.lambda_line = 2.6e7*u.AA 
+            self.t_Myr_per_line = 80.
+
         elif self.LINE == 'SFRD':
             self.lambda_line = 1.*u.AA 
-        
+            self.t_Myr_per_line = 100.
+
         self.nu_rest = (cu.c / (self.lambda_line)).to(u.Hz) 
+
+        self.sigma_LMh = self.sigma_LMh_dex * np.log(10.0)
 
 """
 Define dictionaries containing default parameters for the models in luminosities_LIM.py
