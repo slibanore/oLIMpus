@@ -9,11 +9,47 @@ BGU - June 2026
 
 from oLIMpus.inputs_LIM import * 
 
+def reproduce_Gong17(z, LineParams, Mdot):
+
+    L = (Mdot / LineParams.line_dict['A_SFR_L'] * u.erg / u.s).to(u.Lsun)
+
+    log10_L = np.log10(L.value)
+    log10_L[np.isnan(log10_L)] = 0.    
+    log10_L[np.isinf(abs(log10_L))] = 0.    
+
+    return log10_L
+
+
+def reproduce_Ambrose26(z, CosmoParams, AstroParams, LineParams, Mh):
+
+    zfstar = np.array((5,6,7,8))
+    fstarvals = np.array((0.021,0.024,0.031,0.061))
+    fstar10 = interp1d(zfstar,fstarvals,bounds_error=False,fill_value=(fstarvals[0],fstarvals[-1]))(z)
+
+    fstar = fstar10 * (Mh / 1e10)**AstroParams.alphastar
+
+    Mstar = fstar * CosmoParams.OmegaB / CosmoParams.OmegaM * Mh
+
+    tstar = 0.5
+    dotM = Mstar * cosmology.Hubinvyr(CosmoParams,z) / tstar
+
+    L = ((LineParams.line_dict['A_SFR'] * (dotM)**LineParams.line_dict['alpha_SFR']).to(u.Lsun)).value
+    
+    if LineParams.DUST_FLAG:
+        L *= (1.-LineParams.line_dict['f_dust'])
+
+    log10_L = np.log10(L)
+    log10_L[np.isnan(log10_L)] = 0.    
+    log10_L[np.isinf(abs(log10_L))] = 0.    
+
+    return log10_L
+
+
 # powerlaw to scale the SFR
 def powerlaw_SFR(line, dotM, line_dict):
 
-    try: 
-        L = (line_dict['A_SFR'] * (dotM / (u.Msun / u.yr))**line_dict['alpha_SFR']).to(u.Lsun)
+    try:
+        L = ((line_dict['A_SFR'] * (dotM)**line_dict['alpha_SFR']).to(u.Lsun)).value
     except:
         L = (line_dict['A_SFR'] * dotM**line_dict['alpha_SFR'])
 
