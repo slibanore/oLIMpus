@@ -71,7 +71,7 @@ def Yang24(line, dotM, line_dict):
             line_dict = Yang24_OIII4960_params
         elif line == 'OIII4364':
             line_dict = Yang24_OIII4364_params
-        elif line == 'OIII5007' or 'OIII':
+        elif line == 'OIII5007' or line == 'OIII':
             line_dict = Yang24_OIII5007_params
         elif line == 'OII':
             line_dict = Yang24_OII_params
@@ -296,3 +296,9 @@ def COMAP_fiducial(line, massVector, nu_rest, line_dict):
 
     return (L*4.9e-5*u.Lsun*(nu_rest.to(u.GHz)/(115.27*u.GHz))**3).value
 
+
+# JWST-calibrated observed-luminosity model (Ha/Hb/OIII/OII); the physics lives in the
+# calibration pipeline's modeling_tools and is passed in as a callable via line_dict.
+def JWST_calibrated(line, dotM, z, line_dict):
+    
+    return line_dict['logL_of'](line, np.log10(dotM), z)

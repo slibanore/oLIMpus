@@ -37,7 +37,7 @@ class Power_Spectra_LIM:
 
     """
 
-    def __init__(self,  UserParams, CosmoParams, LineParams, LIMcoeffs, HMFinterp = None, AstroParams=None, LineParams_cross = None, LIMcoeffs_cross = None, RSD_MODE = 1, SIGMA_FOG = 0.):
+    def __init__(self,  UserParams, CosmoParams, LineParams, LIMcoeffs, HMFinterp = None, AstroParams=None, LineParams_cross = None, LIMcoeffs_cross = None, cov_ln_cross=None, RSD_MODE = 1, SIGMA_FOG = 0.):
                  
         self.get_xi_R0(CosmoParams, LineParams, LineParams_cross)
         
@@ -109,8 +109,9 @@ class Power_Spectra_LIM:
         if LineParams_cross is None:
             self._Pk_LIM_RSD = self._Pk_LIM + LIMcoeffs.Inu_bar[:,np.newaxis]**2 * (growth_rate[:,np.newaxis] * mu2 * self.lin_growth[:,np.newaxis])**2 * CosmoParams._PklinCF[np.newaxis,:] + 2 * LIMcoeffs.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM
         else:
-            self._Pk_LIM_RSD = self._Pk_LIM + LIMcoeffs.Inu_bar[:,np.newaxis]*LIMcoeffs_cross.Inu_bar[:,np.newaxis] * (growth_rate[:,np.newaxis] * mu2 * self.lin_growth[:,np.newaxis])**2 * CosmoParams._PklinCF[np.newaxis,:] + LIMcoeffs.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM + LIMcoeffs_cross.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM_cross
-
+            self._Pk_LIM_RSD = self._Pk_LIM + LIMcoeffs.Inu_bar[:,np.newaxis] * LIMcoeffs_cross.Inu_bar[:,np.newaxis] * (growth_rate[:,np.newaxis] * mu2 * self.lin_growth[:,np.newaxis])**2 \
+              * CosmoParams._PklinCF[np.newaxis,:] + LIMcoeffs_cross.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM \
+              + LIMcoeffs.Inu_bar[:,np.newaxis] * growth_rate[:,np.newaxis] * mu2 * self._Pk_deltaLIM_cross
         if SIGMA_FOG != 0.:
             self._Pk_LIM_RSD /= (1.+ mu2*(self.klist_PS*SIGMA_FOG)**2/2.)**2
 
@@ -136,7 +137,7 @@ class Power_Spectra_LIM:
                     if LineParams_cross.BURSTY_FLAG:
                         print('Check BURSTY_FLAG -- cannot have two different values in LP and LP_cross')
                     
-                integrand_shot_noise_cross = LIMcoeffs.P_shot_noise_cross_integrand(False,CosmoParams,AstroParams,LineParams,LineParams_cross,HMFinterp,HMFinterp.Mhtab[np.newaxis,:], LIMcoeffs.zintegral[:,np.newaxis])
+                integrand_shot_noise_cross = LIMcoeffs.P_shot_noise_cross_integrand(False,CosmoParams,AstroParams,LineParams,LineParams_cross,HMFinterp,HMFinterp.Mhtab[np.newaxis,:], LIMcoeffs.zintegral[:,np.newaxis], cov_ln=cov_ln_cross)
 
                 if LineParams.OBSERVABLE_LIM == 'Tnu':
 
@@ -160,7 +161,7 @@ class Power_Spectra_LIM:
 
                 self.P_shot_noise = shot_noise_cross[:,np.newaxis] * np.ones((len(LIMcoeffs.zintegral),len(self.klist_PS)))
                 
-                self.P_shot_noise *= z21_utilities.Window(CosmoParams._klistCF, LineParams._R, self.WINDOWTYPE)**2
+                self.P_shot_noise *= (z21_utilities.Window(CosmoParams._klistCF, LineParams._R, self.WINDOWTYPE)*z21_utilities.Window(CosmoParams._klistCF, LineParams_cross._R, self.WINDOWTYPE))
 
         else:
 

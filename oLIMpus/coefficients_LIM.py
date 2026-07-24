@@ -64,7 +64,7 @@ class get_LIM_coefficients:
         zLIM, mArray_LIM = np.meshgrid(zLIM_longer, HMFinterp.Mhtab, indexing = 'ij', sparse = True)
 
         # average luminosity density in Lagrangian space
-        rhoL_avg_longer = np.trapz(self.rhoL_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, mArray_LIM, zLIM), HMFinterp.logtabMh, axis = 1) 
+        rhoL_avg_longer = np.trapezoid(self.rhoL_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, mArray_LIM, zLIM), HMFinterp.logtabMh, axis = 1) 
 
         # correction to the average SFRD specific for Li16 model of CO 
         if LineParams.LINE_MODEL == 'Li16':
@@ -187,11 +187,11 @@ class get_LIM_coefficients:
 
         # get the correct mean accounting for EPS 
         integrand_LIM_Lag = EPS_HMF_corr_Lag * self.rhoL_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, mArray_LIM, zArray_LIM)
-        self.rhoL_dR_Lag = np.trapz(integrand_LIM_Lag, HMFinterp.logtabMh, axis = 1)
+        self.rhoL_dR_Lag = np.trapezoid(integrand_LIM_Lag, HMFinterp.logtabMh, axis = 1)
 
         # get the correct mean accounting for EPS and Eulerian
         integrand_LIM = EPS_HMF_corr * self.rhoL_integrand(False,CosmoParams, AstroParams, LineParams, HMFinterp, mArray_LIM, zArray_LIM)
-        self.rhoL_dR = np.trapz(integrand_LIM, HMFinterp.logtabMh, axis = 1)
+        self.rhoL_dR = np.trapezoid(integrand_LIM, HMFinterp.logtabMh, axis = 1)
 
         # compute the gammas for the lognormal approximation as the derivatives of rhoL in Eulerian space -- the function is defined in sfrd.py in zeus21
         self.gamma_LIM_Lag = SFRD_class.compute_numerical_der_gamma(SFRD_class, self.rhoL_dR_Lag[np.newaxis,:], deltaArray_LIM[np.newaxis,:], 1)[0]
@@ -262,7 +262,7 @@ class get_LIM_coefficients:
         return integrand_P_shot_noise
 
 
-    def P_shot_noise_cross_integrand(self, dotM, CosmoParams, AstroParams, LineParams, LineParams_cross, HMFinterp, massVector, z):
+    def P_shot_noise_cross_integrand(self, dotM, CosmoParams, AstroParams, LineParams, LineParams_cross, HMFinterp, massVector, z, cov_ln):
         "Integrand to compute the average line luminosity density"
 
         Mh = massVector # in Msun
@@ -284,7 +284,10 @@ class get_LIM_coefficients:
 
         else:
                 
-            integrand_P_shot_noise *= np.exp(LineParams.sigma_LMh**2)
+            if cov_ln is None:
+                cov_ln = LineParams.sigma_LMh * LineParams_cross.sigma_LMh  # rho = 1
+
+            integrand_P_shot_noise *= np.exp(cov_ln)
 
             if LineParams.LINE_MODEL == 'Li16':
                 if LineParams.line_dict is None:
@@ -365,6 +368,8 @@ class get_LIM_coefficients:
             log10_L = getattr(L,LineParams.LINE_MODEL)(z, CosmoParams, AstroParams, LineParams, massVector)
         elif LineParams.LINE_MODEL == 'reproduce_Gong17':
             log10_L = getattr(L,LineParams.LINE_MODEL)(z, LineParams, dotM)
+        elif LineParams.LINE_MODEL == 'JWST_calibrated':
+            log10_L = getattr(L, LineParams.LINE_MODEL)(LineParams.LINE, dotM, z, LineParams.line_dict)        
         else:
             try:
                 log10_L = getattr(L, LineParams.LINE_MODEL)(LineParams.LINE, dotM, LineParams.line_dict)
@@ -385,27 +390,13 @@ class get_LIM_coefficients:
         else:
             sigma_L = LineParams.sigma_LMh
 
-        if sigma_L or LineParams.stoch_type == 'mean':
+        if sigma_L == 0. or LineParams.stoch_type == 'mean':
             L_of_Mh = 10.**log10_L
         
         else:        
-            log_muL = np.log(10**log10_L) 
-            log_muL[abs(log10_L) == np.inf] = 0.
-
-            if len(log_muL.shape) == 2 or len(log_muL.shape) == 1:
-                Lval = np.logspace(-50,20,503)[:,np.newaxis,np.newaxis]
-            elif len(log_muL.shape) == 3:
-                Lval = np.logspace(-50,20,503)[:,np.newaxis,np.newaxis,np.newaxis]
-
-            coef = 1./(np.sqrt(2*np.pi)*sigma_L*Lval)
-
-            # lognormal distribution
-
-            p_logL =  coef * np.exp(- (np.log(Lval)-log_muL[np.newaxis,:])**2/(2*(sigma_L)**2))
-            p_logL = np.where(np.isnan(p_logL), 0, p_logL)
-            p_logL[p_logL < 1e-50] = 0.
-
-            L_of_Mh = simpson(p_logL * Lval, Lval, axis=0)
+            
+            #  for a pure lognormal the numerical integration from the old version is unnecessary , the mean is analytic
+            L_of_Mh = 10.**log10_L * np.exp(sigma_L**2 / 2.)
 
         L_of_Mh[dotM < 1e-20] = 0.
 
