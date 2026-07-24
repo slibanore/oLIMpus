@@ -10,6 +10,7 @@ BGU - June 2026
 from oLIMpus.inputs_LIM import *
 from oLIMpus import luminosities_LIM as L
 from zeus21.sfrd import Z_init, SFRD_class
+from scipy.integrate import quad_vec
 
 class get_LIM_coefficients:
     """
@@ -66,7 +67,8 @@ class get_LIM_coefficients:
         rhoL_avg_longer = np.trapz(self.rhoL_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, mArray_LIM, zLIM), HMFinterp.logtabMh, axis = 1) 
 
         # correction to the average SFRD specific for Li16 model of CO 
-        if LineParams.stoch_type == 'mean' and LineParams.LINE_MODEL == 'Li16':
+        if LineParams.LINE_MODEL == 'Li16':
+
             if LineParams.line_dict is None:
                 if LineParams.LINE == 'CO21':
                     line_dict = Li16_C021_params
@@ -75,7 +77,7 @@ class get_LIM_coefficients:
             else:
                 line_dict = LineParams.line_dict
 
-            rhoL_avg_longer *= np.exp((line_dict['alpha']**-2-line_dict['alpha']**-1)*line_dict['sigma_SFR'].value**2*np.log(10)**2/2.)
+            rhoL_avg_longer *= np.exp((line_dict['alpha']**-2 - line_dict['alpha']**-1) * line_dict['sigma_SFR'].value**2 * np.log(10)**2 / 2.)
 
         rhoL_interp = sfrd.interpolate.interp1d(zLIM_longer, rhoL_avg_longer, kind = 'cubic', bounds_error = False, fill_value = 0,) 
 
@@ -94,12 +96,12 @@ class get_LIM_coefficients:
 
             if LineParams.quadratic_rhoL: 
 
-                _corrfactorEulerian_LIM = (1+(gamma_Lag-2*gamma2_Lag)*sigma**2)/(1-2*gamma2_Lag*sigma**2) 
+                self._corrfactorEulerian_LIM = (1+(gamma_Lag-2*gamma2_Lag)*sigma**2)/(1-2*gamma2_Lag*sigma**2) 
                 
             else:
-                _corrfactorEulerian_LIM =  1+ gamma_Lag * sigma**2
+                self._corrfactorEulerian_LIM =  1+ gamma_Lag * sigma**2
                 
-            self.rhoL_bar *= _corrfactorEulerian_LIM
+            self.rhoL_bar *= self._corrfactorEulerian_LIM
 
         # Line Intensity Anisotropies
         if LineParams.OBSERVABLE_LIM == 'Tnu':
@@ -121,6 +123,10 @@ class get_LIM_coefficients:
         # this is the observed intensity
         self.Inu_bar = self.coeff1_LIM * self.rhoL_bar
 
+        if LineParams.BURSTY_FLAG:
+            self.sigPS_at_M(LineParams, HMFinterp.Mhtab[np.newaxis,:])
+            self.VarL_bursty(LineParams)
+
         if LineParams.shot_noise:
 
             integrand_shot = self.P_shot_noise_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, HMFinterp.Mhtab[np.newaxis,:], self.z_Init.zintegral[:,np.newaxis])
@@ -135,7 +141,8 @@ class get_LIM_coefficients:
             
             self.shot_noise = scale_power_spectrum.value * np.trapezoid(integrand_shot, HMFinterp.logtabMh, axis = 1) 
 
-            self.shot_noise *= _corrfactorEulerian_LIM**2
+            if(UserParams.C2_RENORMALIZATION_FLAG==True): 
+                self.shot_noise *= self._corrfactorEulerian_LIM**2
 
 
     def compute_sigmaR_nu_LIM(self, CosmoParams, HMFinterp, z_array, Mh_array, d_array):
@@ -230,11 +237,16 @@ class get_LIM_coefficients:
 
         Ltab_curr = self.LineLuminosity(dotM, CosmoParams, AstroParams, LineParams, HMFinterp, Mh, z) 
 
-        integrand_P_shot_noise = dndlogM**-1 * (dndlogM * Ltab_curr)**2  # units Lsun2 Mpc-3 because of the delta Dirac ? 
+        integrand_P_shot_noise = dndlogM * Ltab_curr**2  # units Lsun2 Mpc-3 because of the delta Dirac ? 
 
-        if LineParams.stoch_type == 'mean':
-            
-            integrand_P_shot_noise *= np.exp(LineParams.sigma_LMh.value**2*np.log(10)**2)
+        if LineParams.BURSTY_FLAG:
+
+            bursty_boost = 1. + self.V_lambda_burst
+            integrand_P_shot_noise *= bursty_boost
+
+        else:
+                
+            integrand_P_shot_noise *= np.exp(LineParams.sigma_LMh**2)
 
             if LineParams.LINE_MODEL == 'Li16':
                 if LineParams.line_dict is None:
@@ -246,6 +258,55 @@ class get_LIM_coefficients:
                     line_dict = LineParams.line_dict
 
                 integrand_P_shot_noise *= np.exp((2.*line_dict['alpha']**-2-line_dict['alpha']**-1)*line_dict['sigma_SFR'].value**2*np.log(10)**2)
+
+        return integrand_P_shot_noise
+
+
+    def P_shot_noise_cross_integrand(self, dotM, CosmoParams, AstroParams, LineParams, LineParams_cross, HMFinterp, massVector, z):
+        "Integrand to compute the average line luminosity density"
+
+        Mh = massVector # in Msun
+
+        HMF_curr = np.exp(HMFinterp.logHMFint((np.log(Mh), z))) # in Mpc-3 
+
+        dMdlogM = Mh
+        dndlogM = HMF_curr * dMdlogM
+
+        Ltab_curr_1 = self.LineLuminosity(dotM, CosmoParams, AstroParams, LineParams, HMFinterp, Mh, z) 
+        Ltab_curr_2 = self.LineLuminosity(dotM, CosmoParams, AstroParams, LineParams_cross, HMFinterp, Mh, z) 
+
+        integrand_P_shot_noise = dndlogM * Ltab_curr_1 * Ltab_curr_2  # units Lsun2 Mpc-3 because of the delta Dirac ? 
+
+        if LineParams.BURSTY_FLAG:
+
+            bursty_boost = self.Cov_l1l2_burst
+            integrand_P_shot_noise *= bursty_boost
+
+        else:
+                
+            integrand_P_shot_noise *= np.exp(LineParams.sigma_LMh**2)
+
+            if LineParams.LINE_MODEL == 'Li16':
+                if LineParams.line_dict is None:
+                    if LineParams.LINE == 'CO21':
+                        line_dict = Li16_C021_params
+                    elif LineParams.LINE == 'CO10':
+                        line_dict = Li16_C010_params
+                else:
+                    line_dict = LineParams.line_dict
+
+                integrand_P_shot_noise *= np.exp((line_dict['alpha']**-2-line_dict['alpha']**-1)*line_dict['sigma_SFR'].value**2*np.log(10)**2)
+
+            if LineParams_cross.LINE_MODEL == 'Li16':
+                if LineParams_cross.line_dict is None:
+                    if LineParams_cross.LINE == 'CO21':
+                        line_dict = Li16_C021_params
+                    elif LineParams_cross.LINE == 'CO10':
+                        line_dict = Li16_C010_params
+                else:
+                    line_dict = LineParams_cross.line_dict
+
+                integrand_P_shot_noise *= np.exp((line_dict['alpha']**-2-line_dict['alpha']**-1)*line_dict['sigma_SFR'].value**2*np.log(10)**2)
 
         return integrand_P_shot_noise
 
@@ -265,7 +326,32 @@ class get_LIM_coefficients:
         # --- #   
         # if not given as input, compute the SFR 
         if dotM is False:
-            dotM = self.SFRD_Init.SFR(CosmoParams, AstroParams, HMFinterp, massVector, z, 2, False, False)    
+            if LineParams.LINE_MODEL == 'reproduce_Gong17':
+                zval = np.array((1.,1.4,1.8,2.2,2.7,3.3,4.,4.8))
+                aval = np.array((-7.90,-7.70,-7.5,-7.1,-6.78,-6.30,-6.15,-5.90))
+                bval = np.array((  2.5, 2.49,2.49,2.42,2.36, 2.25, 2.25, 2.25))
+                cval = np.array((-2.18,-2.18,-2.25,-2.10,-2.2,-2.2,-2.2,-2.2))
+
+                a_z = interp1d(zval,aval,bounds_error=False,fill_value=(aval[0],aval[-1]))(z)
+                b_z = interp1d(zval,bval,bounds_error=False,fill_value=(bval[0],bval[-1]))(z)
+                c_z = interp1d(zval,cval,bounds_error=False,fill_value=(cval[0],cval[-1]))(z)
+
+                dotM = 10**a_z * (massVector / 1e8)**b_z * (1. + massVector / 4e11)**c_z
+            
+            elif LineParams.LINE_MODEL == 'reproduce_Ambrose26':
+                zfstar = np.array((5,6,7,8))
+                fstarvals = np.array((0.021,0.024,0.031,0.061))
+                fstar10 = interp1d(zfstar,fstarvals,bounds_error=False,fill_value=(fstarvals[0],fstarvals[-1]))(z)
+
+                fstar = fstar10 * (massVector / 1e10)**AstroParams.alphastar
+
+                Mstar = fstar * CosmoParams.OmegaB / CosmoParams.OmegaM * massVector
+
+                tstar = 0.5
+                dotM = Mstar * cosmology.Hubinvyr(CosmoParams,z) / tstar
+            
+            else:
+                dotM = self.SFRD_Init.SFR(CosmoParams, AstroParams, HMFinterp, massVector, z, 2, False, False)    
 
         # --- #
         # line luminosity computation
@@ -275,6 +361,10 @@ class get_LIM_coefficients:
             log10_L = getattr(L,LineParams.LINE_MODEL)(LineParams.LINE, massVector, LineParams.nu_rest, LineParams.line_dict)
         elif LineParams.LINE_MODEL == 'Lagache18':
             log10_L = getattr(L,LineParams.LINE_MODEL)(LineParams.LINE, dotM, z, LineParams.line_dict)
+        elif LineParams.LINE_MODEL == 'reproduce_Ambrose26':
+            log10_L = getattr(L,LineParams.LINE_MODEL)(z, CosmoParams, AstroParams, LineParams, massVector)
+        elif LineParams.LINE_MODEL == 'reproduce_Gong17':
+            log10_L = getattr(L,LineParams.LINE_MODEL)(z, LineParams, dotM)
         else:
             try:
                 log10_L = getattr(L, LineParams.LINE_MODEL)(LineParams.LINE, dotM, LineParams.line_dict)
@@ -284,22 +374,21 @@ class get_LIM_coefficients:
 
         # --- #
         # stochasticity computation
-        if LineParams.sigma_LMh == 0. or LineParams.stoch_type == 'mean':
-            L_of_Mh = 10.**log10_L
-        else:
-            if LineParams.LINE_MODEL == 'Li16':
-                if LineParams.line_dict is None:
-                    line_dict = Li16_C021_params
-                else:
-                    line_dict = LineParams.line_dict
-
-                sigma_L = (LineParams.sigma_LMh.value**2 + (line_dict['sigma_SFR'].value/line_dict['alpha'])**2)**0.5
-
+        if LineParams.LINE_MODEL == 'Li16':
+            if LineParams.line_dict is None:
+                line_dict = Li16_C021_params
             else:
-                sigma_L = LineParams.sigma_LMh.value
-        
-            sigma_L = sigma_L * np.log(10)
+                line_dict = LineParams.line_dict
 
+            sigma_L = (LineParams.sigma_LMh**2 + (np.log(10) * line_dict['sigma_SFR'].value/line_dict['alpha'])**2)**0.5
+
+        else:
+            sigma_L = LineParams.sigma_LMh
+
+        if sigma_L or LineParams.stoch_type == 'mean':
+            L_of_Mh = 10.**log10_L
+        
+        else:        
             log_muL = np.log(10**log10_L) 
             log_muL[abs(log10_L) == np.inf] = 0.
 
@@ -321,6 +410,47 @@ class get_LIM_coefficients:
         L_of_Mh[dotM < 1e-20] = 0.
 
         return L_of_Mh
+
+
+    # used if burstiness is on 
+    def sigPS_at_M(self, LineParams, massVector):
+        
+        sigPS = LineParams.sigPS_piv_bursty + LineParams.dsigPS_dlog10M_bursty * (np.log10(massVector) - LineParams.log10M_piv_bursty)
+
+        self.sPS = np.maximum(sigPS, LineParams.sigPS_cap_bursty)
+
+        self.sx2 = 0.5 * self.sPS**2
+
+        return 1
+
+
+    def VarL_bursty(self, LineParams):
+            
+        integrand = lambda s: (LineParams.t_Myr_per_line - s) * (np.exp(self.sx2 * np.exp(-s / LineParams.tauPS_Myr_bursty)) - 1.0)
+
+        V_top_hat, _ = quad_vec(integrand, 0.0, LineParams.t_Myr_per_line, limit=200, epsabs=1e-10, epsrel=1e-8)
+
+        self.V_lambda_burst = V_top_hat * 2. / LineParams.t_Myr_per_line**2
+
+        return 1
+
+
+    def CovL_bursty(self, LineParams, LineParams_cross):
+
+        def L(val):
+            if val >= 0:
+                return min(LineParams.t_Myr_per_line - val, LineParams_cross.t_Myr_per_line) if val < LineParams.t_Myr_per_line else 0.0
+            else:
+                return min(LineParams_cross.t_Myr_per_line + val, LineParams.t_Myr_per_line) if val > -LineParams_cross.t_Myr_per_line else 0.0
+            
+        integrand = lambda val: L(val) * (np.exp(self.sx2 * np.exp(-abs(val) / LineParams.tauPS_Myr_bursty)) - 1.0)
+
+        val_neg, _ = quad_vec(integrand, -LineParams_cross.t_Myr_per_line, 0.0, limit=200, epsabs=1e-12, epsrel=1e-9)
+        val_pos, _ = quad_vec(integrand,  0.0, LineParams.t_Myr_per_line, limit=200, epsabs=1e-12, epsrel=1e-9)
+
+        self.Cov_l1l2_burst = (val_neg + val_pos) / (LineParams.t_Myr_per_line * LineParams_cross.t_Myr_per_line)
+
+        return 1
 
 
     def __getattr__(self, name):

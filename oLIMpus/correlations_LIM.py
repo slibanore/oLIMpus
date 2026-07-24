@@ -37,7 +37,7 @@ class Power_Spectra_LIM:
 
     """
 
-    def __init__(self,  UserParams, CosmoParams, LineParams, LIMcoeffs, LineParams_cross = None, LIMcoeffs_cross = None, RSD_MODE = 1, SIGMA_FOG = 0.):
+    def __init__(self,  UserParams, CosmoParams, LineParams, LIMcoeffs, HMFinterp = None, AstroParams=None, LineParams_cross = None, LIMcoeffs_cross = None, RSD_MODE = 1, SIGMA_FOG = 0.):
                  
         self.get_xi_R0(CosmoParams, LineParams, LineParams_cross)
         
@@ -117,12 +117,53 @@ class Power_Spectra_LIM:
         self._Pk_LIM_RSD[self._Pk_LIM_RSD < 0.] = 0. # this is to avoid when using large smoothing that drops below 0
 
     ### STEP 6: shot noise
-        if LineParams.shot_noise and LineParams_cross is None:
+        if LineParams.shot_noise:
 
-            self.P_shot_noise = LIMcoeffs.shot_noise[:,np.newaxis] * np.ones((len(LIMcoeffs.zintegral),len(self.klist_PS)))
-            self.P_shot_noise *= z21_utilities.Window(CosmoParams._klistCF, LineParams._R, self.WINDOWTYPE)**2
+            if LineParams_cross is None:
+
+                self.P_shot_noise = LIMcoeffs.shot_noise[:,np.newaxis] * np.ones((len(LIMcoeffs.zintegral),len(self.klist_PS)))
+                
+                self.P_shot_noise *= z21_utilities.Window(CosmoParams._klistCF, LineParams._R, self.WINDOWTYPE)**2
+
+            else:
+
+                if LineParams.BURSTY_FLAG:
+                    if LineParams_cross.BURSTY_FLAG:
+                        LIMcoeffs.CovL_bursty(LineParams, LineParams_cross)
+                    else:
+                        print('Check BURSTY_FLAG -- cannot have two different values in LP and LP_cross')
+                else:
+                    if LineParams_cross.BURSTY_FLAG:
+                        print('Check BURSTY_FLAG -- cannot have two different values in LP and LP_cross')
+                    
+                integrand_shot_noise_cross = LIMcoeffs.P_shot_noise_cross_integrand(False,CosmoParams,AstroParams,LineParams,LineParams_cross,HMFinterp,HMFinterp.Mhtab[np.newaxis,:], LIMcoeffs.zintegral[:,np.newaxis])
+
+                if LineParams.OBSERVABLE_LIM == 'Tnu':
+
+                    scale_power_spectrum = np.sqrt(((LIMcoeffs.coeff1_LIM * u.uK * u.Mpc**3 / u.Lsun)**2*u.Lsun**2*u.Mpc**-3).to(u.Mpc**3 * u.uK**2))
+                
+                elif LineParams.OBSERVABLE_LIM == 'Inu':
+
+                    scale_power_spectrum = np.sqrt((((LIMcoeffs.coeff1_LIM*u.Jy/u.steradian/u.Lsun/u.Mpc**-3)**2)*u.Lsun**2*u.Mpc**-3).to(u.Mpc**3 * u.Jy**2/u.steradian**2))
+
+                if LineParams_cross.OBSERVABLE_LIM == 'Tnu':
+
+                    scale_power_spectrum_cross = np.sqrt(((LIMcoeffs_cross.coeff1_LIM * u.uK * u.Mpc**3 / u.Lsun)**2*u.Lsun**2*u.Mpc**-3).to(u.Mpc**3 * u.uK**2))
+                
+                elif LineParams_cross.OBSERVABLE_LIM == 'Inu':
+
+                    scale_power_spectrum_cross = np.sqrt((((LIMcoeffs_cross.coeff1_LIM*u.Jy/u.steradian/u.Lsun/u.Mpc**-3)**2)*u.Lsun**2*u.Mpc**-3).to(u.Mpc**3 * u.Jy**2/u.steradian**2))
+
+                shot_noise_cross =  scale_power_spectrum.value * scale_power_spectrum_cross.value * np.trapezoid(integrand_shot_noise_cross, HMFinterp.logtabMh, axis = 1) 
+
+                shot_noise_cross *= (LIMcoeffs._corrfactorEulerian_LIM * LIMcoeffs_cross._corrfactorEulerian_LIM)
+
+                self.P_shot_noise = shot_noise_cross[:,np.newaxis] * np.ones((len(LIMcoeffs.zintegral),len(self.klist_PS)))
+                
+                self.P_shot_noise *= z21_utilities.Window(CosmoParams._klistCF, LineParams._R, self.WINDOWTYPE)**2
 
         else:
+
             self.P_shot_noise = 0.
 
         self._Pk_LIM_tot = self._Pk_LIM_RSD + self.P_shot_noise
