@@ -246,7 +246,8 @@ class get_LIM_coefficients:
 
         else:
                 
-            integrand_P_shot_noise *= np.exp(LineParams.sigma_LMh**2)
+            # sigma AT z: the scatter is not necessarily constant in redshift.
+            integrand_P_shot_noise *= np.exp(LineParams.sigma_LMh_at(z)**2)
 
             if LineParams.LINE_MODEL == 'Li16':
                 if LineParams.line_dict is None:
@@ -285,7 +286,11 @@ class get_LIM_coefficients:
         else:
                 
             if cov_ln is None:
-                cov_ln = LineParams.sigma_LMh * LineParams_cross.sigma_LMh  # rho = 1
+                cov_ln = (LineParams.sigma_LMh_at(z)
+                          * LineParams_cross.sigma_LMh_at(z))  # rho = 1
+            elif callable(cov_ln):
+                # a redshift-dependent covariance, evaluated on the same grid
+                cov_ln = cov_ln(z)
 
             integrand_P_shot_noise *= np.exp(cov_ln)
 
@@ -388,9 +393,12 @@ class get_LIM_coefficients:
             sigma_L = (LineParams.sigma_LMh**2 + (np.log(10) * line_dict['sigma_SFR'].value/line_dict['alpha'])**2)**0.5
 
         else:
-            sigma_L = LineParams.sigma_LMh
+            sigma_L = LineParams.sigma_LMh_at(z)
 
-        if sigma_L == 0. or LineParams.stoch_type == 'mean':
+        # `sigma_L == 0.` was a scalar-only test and raised once sigma_L
+        # became an array. Dropping it changes nothing: exp(0) = 1, so the
+        # 'median' branch already reproduces the zero-scatter result.
+        if LineParams.stoch_type == 'mean':
             L_of_Mh = 10.**log10_L
         
         else:        

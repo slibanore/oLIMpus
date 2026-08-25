@@ -50,8 +50,17 @@ class Line_Parameters:
     stoch_type: str
         Whether to anchor the stochastic enhancement to the mean ("mean") or on the median ("median")
         TODO: Add burstiness option from 2605.13967
-    sigma_LMh: float = 0.   
-        Deterministic rms normal scatter in dex 
+    sigma_LMh_dex: float = 0.
+        Deterministic rms normal scatter in dex, CONSTANT in redshift.
+    sigma_LMh_dex_of_z: callable or None
+        Optional callable z -> scatter in dex, used INSTEAD of
+        sigma_LMh_dex wherever the scatter is applied. Supplied when the
+        scatter is calibrated as a function of redshift; None (the
+        default) reproduces the constant behaviour exactly. It is
+        evaluated with whatever z the caller holds, so it must broadcast:
+        a scalar z gives a scalar, and the (nz, 1) redshift column used by
+        the luminosity-density and shot-noise integrands gives an (nz, 1)
+        column.
     line_dict: dict
         Dictionary containing all the quantities required to estimate the line luminosity (see at the bottom of this file) 
 
@@ -76,6 +85,7 @@ class Line_Parameters:
 
     stoch_type: str = "mean"
     sigma_LMh_dex: float = 0.
+    sigma_LMh_dex_of_z: object = None
     sigPS_piv_bursty: float = 2.
     log10M_piv_bursty: float = 11
     sigPS_cap_bursty: float = 0.25
@@ -132,6 +142,18 @@ class Line_Parameters:
         self.nu_rest = (cu.c / (self.lambda_line)).to(u.Hz) 
 
         self.sigma_LMh = self.sigma_LMh_dex * np.log(10.0)
+
+    def sigma_LMh_at(self, z):
+        """Scatter of ln L at fixed halo mass, evaluated AT z.
+
+        Returns the constant sigma_LMh when sigma_LMh_dex_of_z is None, so every
+        call site behaves exactly as before. Otherwise the callable is evaluated
+        at z and converted from dex to natural log. The conversion lives here,
+        once, so a caller cannot forget the ln(10).
+        """
+        if self.sigma_LMh_dex_of_z is None:
+            return self.sigma_LMh
+        return np.asarray(self.sigma_LMh_dex_of_z(z), dtype=float) * np.log(10.0)
 
 """
 Define dictionaries containing default parameters for the models in luminosities_LIM.py
