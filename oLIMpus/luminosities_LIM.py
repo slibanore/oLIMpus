@@ -1,3 +1,4 @@
+
 """
 
 Contains SFR-luminosity relations to compute star-forming lines luminosities
@@ -7,15 +8,15 @@ BGU - June 2026
 
 """
 
-from oLIMpus.inputs_LIM import * 
+from oLIMpus.inputs_LIM import *
 
 def reproduce_Gong17(z, LineParams, Mdot):
 
     L = (Mdot / LineParams.line_dict['A_SFR_L'] * u.erg / u.s).to(u.Lsun)
 
     log10_L = np.log10(L.value)
-    log10_L[np.isnan(log10_L)] = 0.    
-    log10_L[np.isinf(abs(log10_L))] = 0.    
+    log10_L[np.isnan(log10_L)] = 0.
+    log10_L[np.isinf(abs(log10_L))] = 0.
 
     return log10_L
 
@@ -34,13 +35,13 @@ def reproduce_Ambrose26(z, CosmoParams, AstroParams, LineParams, Mh):
     dotM = Mstar * cosmology.Hubinvyr(CosmoParams,z) / tstar
 
     L = ((LineParams.line_dict['A_SFR'] * (dotM)**LineParams.line_dict['alpha_SFR']).to(u.Lsun)).value
-    
+
     if LineParams.DUST_FLAG:
         L *= (1.-LineParams.line_dict['f_dust'])
 
     log10_L = np.log10(L)
-    log10_L[np.isnan(log10_L)] = 0.    
-    log10_L[np.isinf(abs(log10_L))] = 0.    
+    log10_L[np.isnan(log10_L)] = 0.
+    log10_L[np.isinf(abs(log10_L))] = 0.
 
     return log10_L
 
@@ -54,13 +55,13 @@ def powerlaw_SFR(line, dotM, line_dict):
         L = (line_dict['A_SFR'] * dotM**line_dict['alpha_SFR'])
 
     log10_L = np.log10(L)
-    log10_L[np.isnan(log10_L)] = 0.    
-    log10_L[np.isinf(abs(log10_L))] = 0.    
+    log10_L[np.isnan(log10_L)] = 0.
+    log10_L[np.isinf(abs(log10_L))] = 0.
 
     return log10_L
 
 ########################################################
-### UV AND OPTICAL 
+### UV AND OPTICAL
 ########################################################
 
 # from arXiv:2409.03997, Eq. 16
@@ -91,7 +92,7 @@ def Yang24(line, dotM, line_dict):
     L_line = 2. * N * dotM / ((dotM / SFR1)**(-alpha) + (dotM / SFR1)**beta)
 
     log10_L = np.log10(L_line)
-    
+
     return log10_L
 
 # from arXiv:2111.02411, Eq. 1
@@ -132,7 +133,7 @@ def THESAN21(line, dotM, line_dict):
     return log10_L
 
 ########################################################
-### INFRARED 
+### INFRARED
 ########################################################
 
 # from arXiv:1711.00798, Eq. 10 anchored at z=10
@@ -150,17 +151,17 @@ def Lagache18(line, dotM, z, line_dict):
     beta_SFR = line_dict['beta_SFR_0'] + line_dict['beta_SFR'] * z
 
     try:
-        alpha_SFR[alpha_SFR < 0.] = 0. 
+        alpha_SFR[alpha_SFR < 0.] = 0.
     except:
         if alpha_SFR < 0.:
             alpha_SFR = 0.
 
-    log10_L = alpha_SFR * np.log10(dotM) + beta_SFR 
+    log10_L = alpha_SFR * np.log10(dotM) + beta_SFR
 
     return log10_L
 
 ########################################################
-### SUB-MM 
+### SUB-MM
 ########################################################
 
 # from arXiv:2108.07716, tab 1
@@ -172,7 +173,7 @@ def Yang21(line, massVector, z, line_dict):
     if line == 'CO21':
         if line_dict is None:
             line_dict = Yang21_CO21_params
-                    
+
         logM1 = np.where(z < 4.0,
                         YangEmp_f2(12.12, -0.1704, 0, z),
                         np.where(z < 5.0,
@@ -196,7 +197,7 @@ def Yang21(line, massVector, z, line_dict):
                     np.where(z < 5.0,
                             YangEmp_f2(0.657, -0.0794, 0, z),
                             YangEmp_f1(38.3, 0.841, 0.169, z)))# !!! note that this above 8.5 is not correct
-        
+
     elif line == 'CO10':
         if line_dict is None:
             line_dict = Yang21_CO10_params
@@ -231,7 +232,7 @@ def Yang21(line, massVector, z, line_dict):
 
     # Empirically fit parameter values for the Yang+ empirical XX model
     A = line_dict['A']
-    
+
     M1 = 10**logM1
     N = 10**logN
 
@@ -258,7 +259,7 @@ def Li16(line, dotM, line_dict):
 
     log10_SFR = np.log10(dotM)
 
-    # Eq. 1 
+    # Eq. 1
     # L_IR = 10**log10_SFR / (dMF*1e-10)
     # Eq in Kennicutt 1998
     L_IR = ((10**log10_SFR/4.5e-44*u.erg/u.s).to(u.Lsun)).value
@@ -267,14 +268,14 @@ def Li16(line, dotM, line_dict):
     Lprime = (10.**-beta * L_IR)**(1./alpha)
 
     if line == 'CO21': # 2-1 transition
-        lambda_line = 1.3e7*u.AA 
+        lambda_line = 1.3e7*u.AA
     elif line == 'CO10': # 1-0 transition
-        lambda_line = 2.6e7*u.AA 
+        lambda_line = 2.6e7*u.AA
 
-    nu_rest = (cu.c / (lambda_line)).to(u.GHz) # rest frame frequency in Hz 
+    nu_rest = (cu.c / (lambda_line)).to(u.GHz) # rest frame frequency in Hz
     scale_nu = nu_rest / (115.27*u.GHz)
 
-    # Eq. 4 
+    # Eq. 4
     log10_L = np.log10(L0 * Lprime * scale_nu**3)
 
     return log10_L
@@ -285,20 +286,24 @@ def COMAP_fiducial(line, massVector, nu_rest, line_dict):
     if 'CO' not in line:
         print('\nCOMAP model can only be used for CO lines!')
         return -1
-    
-    
+
+
     A = line_dict['A']
     B = line_dict['B']
     C = line_dict['C']
     Ms = 10.**line_dict['Ms']
-    
+
     L = C/((massVector/Ms)**A+(massVector/Ms)**B)
 
-    return (L*4.9e-5*u.Lsun*(nu_rest.to(u.GHz)/(115.27*u.GHz))**3).value
+    # FIX 2: every other model in this module returns log10(L); COMAP_fiducial
+    # returned L itself, so the caller exponentiated it a second time.
+    L_Lsun = (L*4.9e-5*u.Lsun*(nu_rest.to(u.GHz)/(115.27*u.GHz))**3).value
+
+    return np.log10(L_Lsun)
 
 
 # JWST-calibrated observed-luminosity model (Ha/Hb/OIII/OII); the physics lives in the
 # calibration pipeline's modeling_tools and is passed in as a callable via line_dict.
 def JWST_calibrated(line, dotM, z, line_dict):
-    
+
     return line_dict['logL_of'](line, np.log10(dotM), z)
