@@ -9,8 +9,66 @@ BGU - June 2026
 
 from oLIMpus.inputs_LIM import *
 from oLIMpus import luminosities_LIM as L
+from oLIMpus import burstiness_LIM
 from zeus21.sfrd import Z_init, SFRD_class
-from scipy.integrate import quad_vec
+
+# delta/sigma_R grid used only to normalise C_EPS. +-6 sigma is well past where the
+# Gaussian weight matters; 161 points converges the normalisation to better than 1e-6.
+_DELTA_NORM_GRID = np.linspace(-6., 6., 161)
+
+
+def EPS_HMF_ratio(sigmaM, sigmaR, delta, delta_crit, a_corr):
+    """Eq. 6 of arXiv:2507.15922: (dn_EPS/dMh)(delta_R) / <dn_EPS/dMh>.
+
+    Identically zero wherever sigma_M < sigma_R: a halo whose Lagrangian radius exceeds
+    R does not fit inside the smoothing sphere and is cut from the sum.
+    """
+    modSigmaSq = sigmaM**2 - sigmaR**2
+    tooBig = modSigmaSq <= 0.0
+    modSigma = np.sqrt(np.where(tooBig, np.inf, modSigmaSq))
+    nu0 = np.where(tooBig, 1.0, delta_crit / sigmaM)
+    nu = (delta_crit - delta) / modSigma
+
+    return (nu/nu0) * (sigmaM/modSigma)**2.0 * np.exp(-a_corr * (nu**2 - nu0**2)/2.0)
+
+
+def EPS_HMF_norm(sigmaM, sigmaR, delta_crit, a_corr):
+    """<C_EPS>_delta_R, the factor that makes Eq. 5 do what its text says it does.
+
+    The paragraph under Eq. 5 of arXiv:2507.15922 states that rescaling the EPS ratio by
+    the Sheth-Tormen HMF recovers the correct average when integrating over Mh, i.e.
+    <C_EPS>_delta = dn/dMh. That identity is exact for a_corr = 1 (pure Press-Schechter)
+    and is broken by a_ST = 0.707: measured at z = 6, R0 = 1 Mpc it is 1.05 at 1e8 Msun
+    but 0.53 at 1e11, which propagates straight into rho_L_bar through Eq. 8. Dividing
+    the ratio by this factor enforces the identity.
+
+    Returns 1 where the ratio vanishes, so halos that do not fit in R stay excluded
+    rather than being divided by zero. The residual left there is not a normalisation:
+    those halos are outside the reach of the conditional HMF at that R.
+    """
+    d = _DELTA_NORM_GRID * sigmaR
+    ratio = EPS_HMF_ratio(sigmaM, sigmaR, d, delta_crit, a_corr)
+    w = np.exp(-_DELTA_NORM_GRID**2/2.) / np.sqrt(2*np.pi)
+    n = np.trapezoid(ratio * w, _DELTA_NORM_GRID, axis=-1)[..., np.newaxis]
+
+    return np.where(n > 0., n, 1.)
+
+
+def _resolve_Li16_dict(LineParams):
+    """The Li16 parameter dictionary for this line.
+
+    Was duplicated in four places (the mean-SFRD correction and the three shot-noise
+    branches); one helper keeps them from drifting apart.
+    """
+    if LineParams.line_dict is not None:
+        return LineParams.line_dict
+    if LineParams.LINE == 'CO21':
+        return Li16_C021_params
+    if LineParams.LINE == 'CO10':
+        return Li16_C010_params
+    raise ValueError("LINE_MODEL='Li16' has no default parameters for LINE=%r; "
+                     "pass line_dict explicitly." % LineParams.LINE)
+
 
 class get_LIM_coefficients:
     """
@@ -57,7 +115,11 @@ class get_LIM_coefficients:
         self.USE_POPIII = AstroParams.USE_POPIII 
 
         # compute sigmaR for the required resolution and redshift array
-        self.sigmaofRtab_LIM = np.array([HMFinterp.sigmaR_int(LineParams._R, zz) for zz in self.z_Init.zintegral]).T[0]
+        # HMFinterp.sigmaR_int builds a (1,2) array per z; sigmaRintlog is the
+        # underlying RegularGridInterpolator and takes the whole z column.
+        _zz = self.z_Init.zintegral
+        self.sigmaofRtab_LIM = HMFinterp.sigmaRintlog(
+            (np.full_like(_zz, np.log(LineParams._R)), _zz))
 
         # compute the average luminosity density in Lagrangian space
         zLIM_longer = np.geomspace(UserParams.zmin, constants.zmax_AstroBreak, 128) #e xtend to z = constants.zmax_AstroBreak for extrapolation purposes
@@ -69,38 +131,36 @@ class get_LIM_coefficients:
         # correction to the average SFRD specific for Li16 model of CO 
         if LineParams.LINE_MODEL == 'Li16':
 
-            if LineParams.line_dict is None:
-                if LineParams.LINE == 'CO21':
-                    line_dict = Li16_C021_params
-                elif LineParams.LINE == 'CO10':
-                    line_dict = Li16_C010_params
-            else:
-                line_dict = LineParams.line_dict
+            line_dict = _resolve_Li16_dict(LineParams)
 
             rhoL_avg_longer *= np.exp((line_dict['alpha']**-2 - line_dict['alpha']**-1) * line_dict['sigma_SFR'].value**2 * np.log(10)**2 / 2.)
 
-        rhoL_interp = sfrd.interpolate.interp1d(zLIM_longer, rhoL_avg_longer, kind = 'cubic', bounds_error = False, fill_value = 0,) 
+        # bounds_error=True on purpose. With fill_value=0 a mismatch between
+        # UserParams.zmin and the z_Init grid (e.g. reusing a zmin=5 UserParams with a
+        # zmin=2.5 Z_init) silently returned rho_L = 0, and therefore Inu_bar = 0, for
+        # every redshift below UserParams.zmin. Fail loudly instead.
+        rhoL_interp = sfrd.interpolate.interp1d(zLIM_longer, rhoL_avg_longer, kind = 'cubic', bounds_error = True)
 
         self.rhoL_avg = rhoL_interp(self.z_Init.zintegral) # Lagrangian
         self.rhoL_bar =  rhoL_interp(self.z_Init.zintegral) # this will be converted to EPS and to Eulerian
 
         self.compute_gamma_LIM(CosmoParams, AstroParams, LineParams, HMFinterp)
 
-        # Correct Eulerian-Lagrangian mean
-        if(UserParams.C2_RENORMALIZATION_FLAG==True): 
+        # Correct Eulerian-Lagrangian mean, Eqs. 13-14 of arXiv:2507.15922.
+        if(UserParams.C2_RENORMALIZATION_FLAG==True):
 
-            sigma = self.sigmaofRtab_LIM**2
+            sigma2 = self.sigmaofRtab_LIM**2
 
             gamma_Lag = self.gamma_LIM_Lag
             gamma2_Lag = self.gamma2_LIM_Lag
 
-            if LineParams.quadratic_rhoL: 
+            if LineParams.quadratic_rhoL:
 
-                self._corrfactorEulerian_LIM = (1+(gamma_Lag-2*gamma2_Lag)*sigma**2)/(1-2*gamma2_Lag*sigma**2) 
-                
+                self._corrfactorEulerian_LIM = (1+(gamma_Lag-2*gamma2_Lag)*sigma2)/(1-2*gamma2_Lag*sigma2)
+
             else:
-                self._corrfactorEulerian_LIM =  1+ gamma_Lag * sigma**2
-                
+                self._corrfactorEulerian_LIM =  1+ gamma_Lag * sigma2
+
             self.rhoL_bar *= self._corrfactorEulerian_LIM
 
         # Line Intensity Anisotropies
@@ -124,12 +184,35 @@ class get_LIM_coefficients:
         self.Inu_bar = self.coeff1_LIM * self.rhoL_bar
 
         if LineParams.BURSTY_FLAG:
-            self.sigPS_at_M(LineParams, HMFinterp.Mhtab[np.newaxis,:])
-            self.VarL_bursty(LineParams)
+            # Burstiness IS the luminosity scatter in the mean-anchored convention of
+            # arXiv:2605.13967. Stacking the phenomenological sigma_LMh on top of it, or
+            # using stoch_type='median', would double count the second moment. Extra
+            # NON-burstiness scatter goes through sigma_extra_dex instead.
+            if LineParams.stoch_type != 'mean' or LineParams.sigma_LMh_dex != 0.:
+                raise ValueError("BURSTY_FLAG=True requires stoch_type='mean' and "
+                                 "sigma_LMh_dex=0: the OU burstiness already supplies "
+                                 "the luminosity scatter (arXiv:2605.13967, Eq. 6). "
+                                 "Use sigma_extra_dex for non-burstiness scatter.")
+            if LineParams.LINE_MODEL == 'Li16':
+                raise ValueError("BURSTY_FLAG=True is incompatible with LINE_MODEL='Li16', "
+                                 "whose line_dict['sigma_SFR'] is itself a lognormal SFR "
+                                 "scatter and would be double counted.")
+
+            _Mh = HMFinterp.Mhtab[np.newaxis, :]
+            self.sPS = burstiness_LIM.sigma_PS_of_M(_Mh, LineParams)
+            self.V_lambda_burst = burstiness_LIM.V_lambda(_Mh, LineParams)
+            self.boost_per_halo = burstiness_LIM.boost_per_halo(_Mh, LineParams)
 
         if LineParams.shot_noise:
 
-            integrand_shot = self.P_shot_noise_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, HMFinterp.Mhtab[np.newaxis,:], self.z_Init.zintegral[:,np.newaxis])
+            _Mh_col = HMFinterp.Mhtab[np.newaxis,:]
+            _z_col = self.z_Init.zintegral[:,np.newaxis]
+
+            # The deterministic (halo-discreteness) integrand, Eq. 3 of 2605.13967, and the
+            # one that carries the scatter, Eq. 2. Keeping both makes the mass-integrated
+            # boost B_lambda(z) a ratio the user can read off directly.
+            integrand_shot_det = self.P_shot_noise_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, _Mh_col, _z_col, deterministic=True)
+            integrand_shot = self.P_shot_noise_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, _Mh_col, _z_col)
             
             if LineParams.OBSERVABLE_LIM == 'Tnu':
 
@@ -139,13 +222,16 @@ class get_LIM_coefficients:
 
                 scale_power_spectrum = (((self.coeff1_LIM*u.Jy/u.steradian/u.Lsun/u.Mpc**-3)**2)*u.Lsun**2*u.Mpc**-3).to(u.Mpc**3 * u.Jy**2/u.steradian**2)
             
-            self.shot_noise = scale_power_spectrum.value * np.trapezoid(integrand_shot, HMFinterp.logtabMh, axis = 1) 
+            self.shot_noise = scale_power_spectrum.value * np.trapezoid(integrand_shot, HMFinterp.logtabMh, axis = 1)
+            self.shot_noise_det = scale_power_spectrum.value * np.trapezoid(integrand_shot_det, HMFinterp.logtabMh, axis = 1)
 
             if(UserParams.C2_RENORMALIZATION_FLAG==True): 
                 self.shot_noise *= self._corrfactorEulerian_LIM**2
+                self.shot_noise_det *= self._corrfactorEulerian_LIM**2
 
 
-    def compute_sigmaR_nu_LIM(self, CosmoParams, HMFinterp, z_array, Mh_array, d_array):
+    def compute_sigmaR_nu_LIM(self, CosmoParams, HMFinterp, z_array, Mh_array, d_array,
+                              normalize_CEPS=True):
 
         zArray_LIM, mArray_LIM, deltaNormArray_LIM = np.meshgrid(z_array, Mh_array, d_array, indexing = 'ij', sparse = True)
 
@@ -154,22 +240,14 @@ class get_LIM_coefficients:
         # get sigma_M
         sigmaM_LIM = HMFinterp.sigmaintlog((np.log(mArray_LIM), zArray_LIM))
 
-        # ---- #
-        # compute the EPS correction
-        modSigmaSq_LIM = sigmaM_LIM**2 - sigmaR_LIM**2
-        indexTooBig = (modSigmaSq_LIM <= 0.0)
-        modSigmaSq_LIM[indexTooBig] = np.inf #if sigmaR > sigmaM the halo does not fit in the radius R. Cut the sum
-        modSigmaSq_LIM = np.sqrt(modSigmaSq_LIM)
-
-        nu0 = CosmoParams.delta_crit_ST / sigmaM_LIM # this is needed in the HMF 
-        nu0[indexTooBig] = 1.0
-
         deltaArray_LIM = deltaNormArray_LIM * sigmaR_LIM
 
-        modd_LIM = CosmoParams.delta_crit_ST - deltaArray_LIM
-        nu = modd_LIM / modSigmaSq_LIM # used in the HMF
+        EPS_HMF_corr_Lag = EPS_HMF_ratio(sigmaM_LIM, sigmaR_LIM, deltaArray_LIM,
+                                         CosmoParams.delta_crit_ST, CosmoParams.a_corr_EPS)
 
-        EPS_HMF_corr_Lag = (nu/nu0) * (sigmaM_LIM/modSigmaSq_LIM)**2.0 * np.exp(-CosmoParams.a_corr_EPS * (nu**2-nu0**2)/2.0 ) 
+        if normalize_CEPS:
+            EPS_HMF_corr_Lag = EPS_HMF_corr_Lag / EPS_HMF_norm(
+                sigmaM_LIM, sigmaR_LIM, CosmoParams.delta_crit_ST, CosmoParams.a_corr_EPS)
 
         return EPS_HMF_corr_Lag, mArray_LIM, zArray_LIM, deltaArray_LIM
     
@@ -181,17 +259,16 @@ class get_LIM_coefficients:
         Nds = 3 # how many deltas
         deltatab_norm = np.linspace(-Nsigmad,Nsigmad,Nds)
 
-        EPS_HMF_corr_Lag, mArray_LIM, zArray_LIM, deltaArray_LIM = self.compute_sigmaR_nu_LIM(CosmoParams, HMFinterp, self.z_Init.zintegral, HMFinterp.Mhtab, deltatab_norm)
-
-        EPS_HMF_corr = (1.0 + deltaArray_LIM) * EPS_HMF_corr_Lag
+        EPS_HMF_corr_Lag, mArray_LIM, zArray_LIM, deltaArray_LIM = self.compute_sigmaR_nu_LIM(CosmoParams, HMFinterp, self.z_Init.zintegral, HMFinterp.Mhtab, deltatab_norm, LineParams.normalize_CEPS)
 
         # get the correct mean accounting for EPS 
         integrand_LIM_Lag = EPS_HMF_corr_Lag * self.rhoL_integrand(False, CosmoParams, AstroParams, LineParams, HMFinterp, mArray_LIM, zArray_LIM)
         self.rhoL_dR_Lag = np.trapezoid(integrand_LIM_Lag, HMFinterp.logtabMh, axis = 1)
 
-        # get the correct mean accounting for EPS and Eulerian
-        integrand_LIM = EPS_HMF_corr * self.rhoL_integrand(False,CosmoParams, AstroParams, LineParams, HMFinterp, mArray_LIM, zArray_LIM)
-        self.rhoL_dR = np.trapezoid(integrand_LIM, HMFinterp.logtabMh, axis = 1)
+        # EPS_HMF_corr = (1+delta) * EPS_HMF_corr_Lag and (1+delta) does not
+        # depend on Mh, so the Eulerian integral is exactly (1+delta) times the
+        # Lagrangian one. 
+        self.rhoL_dR = (1.0 + deltaArray_LIM[:, 0, :]) * self.rhoL_dR_Lag
 
         # compute the gammas for the lognormal approximation as the derivatives of rhoL in Eulerian space -- the function is defined in sfrd.py in zeus21
         self.gamma_LIM_Lag = SFRD_class.compute_numerical_der_gamma(SFRD_class, self.rhoL_dR_Lag[np.newaxis,:], deltaArray_LIM[np.newaxis,:], 1)[0]
@@ -225,66 +302,77 @@ class get_LIM_coefficients:
         return integrand_LIM
 
 
-    def P_shot_noise_integrand(self, dotM, CosmoParams, AstroParams, LineParams, HMFinterp, massVector, z):
-        "Integrand to compute the average line luminosity density"
+    def P_shot_noise_integrand(self, dotM, CosmoParams, AstroParams, LineParams, HMFinterp, massVector, z, deterministic=False):
+        """Integrand of the shot-noise power spectrum, Eq. 35 of arXiv:2507.15922.
+
+        dn/dlogMh * <L^2>(Mh, z). With `deterministic=True` the second moment is
+        replaced by Lbar^2, i.e. the halo-discreteness term alone (Eq. 3 of
+        arXiv:2605.13967); the ratio of the two integrals is the mass-integrated
+        boost B_lambda.
+        """
 
         Mh = massVector # in Msun
 
-        HMF_curr = np.exp(HMFinterp.logHMFint((np.log(Mh), z))) # in Mpc-3 
+        HMF_curr = np.exp(HMFinterp.logHMFint((np.log(Mh), z))) # in Mpc-3
 
         dMdlogM = Mh
         dndlogM = HMF_curr * dMdlogM
 
-        Ltab_curr = self.LineLuminosity(dotM, CosmoParams, AstroParams, LineParams, HMFinterp, Mh, z) 
+        Ltab_curr = self.LineLuminosity(dotM, CosmoParams, AstroParams, LineParams, HMFinterp, Mh, z)
 
-        integrand_P_shot_noise = dndlogM * Ltab_curr**2  # units Lsun2 Mpc-3 because of the delta Dirac ? 
+        integrand_P_shot_noise = dndlogM * Ltab_curr**2  # units Lsun2 Mpc-3 because of the delta Dirac ?
+
+        if deterministic:
+            return integrand_P_shot_noise
 
         if LineParams.BURSTY_FLAG:
 
-            bursty_boost = 1. + self.V_lambda_burst
-            integrand_P_shot_noise *= bursty_boost
+            # <L^2>/Lbar^2 = 1 + V_lambda(Mh), Eq. 6 of arXiv:2605.13967
+            integrand_P_shot_noise = integrand_P_shot_noise * burstiness_LIM.boost_per_halo(Mh, LineParams)
 
         else:
-                
+
             # sigma AT z: the scatter is not necessarily constant in redshift.
-            integrand_P_shot_noise *= np.exp(LineParams.sigma_LMh_at(z)**2)
+            integrand_P_shot_noise = integrand_P_shot_noise * np.exp(LineParams.sigma_LMh_at(z)**2)
 
             if LineParams.LINE_MODEL == 'Li16':
-                if LineParams.line_dict is None:
-                    if LineParams.LINE == 'CO21':
-                        line_dict = Li16_C021_params
-                    elif LineParams.LINE == 'CO10':
-                        line_dict = Li16_C010_params
-                else:
-                    line_dict = LineParams.line_dict
+                line_dict = _resolve_Li16_dict(LineParams)
 
-                integrand_P_shot_noise *= np.exp((2.*line_dict['alpha']**-2-line_dict['alpha']**-1)*line_dict['sigma_SFR'].value**2*np.log(10)**2)
+                integrand_P_shot_noise = integrand_P_shot_noise * np.exp((2.*line_dict['alpha']**-2-line_dict['alpha']**-1)*line_dict['sigma_SFR'].value**2*np.log(10)**2)
 
         return integrand_P_shot_noise
 
 
-    def P_shot_noise_cross_integrand(self, dotM, CosmoParams, AstroParams, LineParams, LineParams_cross, HMFinterp, massVector, z, cov_ln):
-        "Integrand to compute the average line luminosity density"
+    def P_shot_noise_cross_integrand(self, dotM, CosmoParams, AstroParams, LineParams, LineParams_cross, HMFinterp, massVector, z, cov_ln, deterministic=False):
+        """Integrand of the cross shot-noise power spectrum between two lines.
+
+        dn/dlogMh * <L1 L2>(Mh, z), Eq. 8 of arXiv:2605.13967. With
+        `deterministic=True` the same-halo cross moment is replaced by Lbar1*Lbar2.
+        """
 
         Mh = massVector # in Msun
 
-        HMF_curr = np.exp(HMFinterp.logHMFint((np.log(Mh), z))) # in Mpc-3 
+        HMF_curr = np.exp(HMFinterp.logHMFint((np.log(Mh), z))) # in Mpc-3
 
         dMdlogM = Mh
         dndlogM = HMF_curr * dMdlogM
 
-        Ltab_curr_1 = self.LineLuminosity(dotM, CosmoParams, AstroParams, LineParams, HMFinterp, Mh, z) 
-        Ltab_curr_2 = self.LineLuminosity(dotM, CosmoParams, AstroParams, LineParams_cross, HMFinterp, Mh, z) 
+        Ltab_curr_1 = self.LineLuminosity(dotM, CosmoParams, AstroParams, LineParams, HMFinterp, Mh, z)
+        Ltab_curr_2 = self.LineLuminosity(dotM, CosmoParams, AstroParams, LineParams_cross, HMFinterp, Mh, z)
 
-        integrand_P_shot_noise = dndlogM * Ltab_curr_1 * Ltab_curr_2  # units Lsun2 Mpc-3 because of the delta Dirac ? 
+        integrand_P_shot_noise = dndlogM * Ltab_curr_1 * Ltab_curr_2
+
+        if deterministic:
+            return integrand_P_shot_noise
 
         if LineParams.BURSTY_FLAG:
 
-            bursty_boost = self.Cov_l1l2_burst
-            integrand_P_shot_noise *= bursty_boost
+            # <L1 L2>/(Lbar1 Lbar2) = 1 + V_12(Mh), Eqs. 9-10 of arXiv:2605.13967.
+            # The '1 +' is the deterministic halo-discreteness term and must not be dropped.
+            integrand_P_shot_noise = integrand_P_shot_noise * burstiness_LIM.boost_per_halo_cross(Mh, LineParams, LineParams_cross)
 
         else:
-                
+
             if cov_ln is None:
                 cov_ln = (LineParams.sigma_LMh_at(z)
                           * LineParams_cross.sigma_LMh_at(z))  # rho = 1
@@ -292,29 +380,15 @@ class get_LIM_coefficients:
                 # a redshift-dependent covariance, evaluated on the same grid
                 cov_ln = cov_ln(z)
 
-            integrand_P_shot_noise *= np.exp(cov_ln)
+            integrand_P_shot_noise = integrand_P_shot_noise * np.exp(cov_ln)
 
             if LineParams.LINE_MODEL == 'Li16':
-                if LineParams.line_dict is None:
-                    if LineParams.LINE == 'CO21':
-                        line_dict = Li16_C021_params
-                    elif LineParams.LINE == 'CO10':
-                        line_dict = Li16_C010_params
-                else:
-                    line_dict = LineParams.line_dict
-
-                integrand_P_shot_noise *= np.exp((line_dict['alpha']**-2-line_dict['alpha']**-1)*line_dict['sigma_SFR'].value**2*np.log(10)**2)
+                line_dict = _resolve_Li16_dict(LineParams)
+                integrand_P_shot_noise = integrand_P_shot_noise * np.exp((line_dict['alpha']**-2-line_dict['alpha']**-1)*line_dict['sigma_SFR'].value**2*np.log(10)**2)
 
             if LineParams_cross.LINE_MODEL == 'Li16':
-                if LineParams_cross.line_dict is None:
-                    if LineParams_cross.LINE == 'CO21':
-                        line_dict = Li16_C021_params
-                    elif LineParams_cross.LINE == 'CO10':
-                        line_dict = Li16_C010_params
-                else:
-                    line_dict = LineParams_cross.line_dict
-
-                integrand_P_shot_noise *= np.exp((line_dict['alpha']**-2-line_dict['alpha']**-1)*line_dict['sigma_SFR'].value**2*np.log(10)**2)
+                line_dict = _resolve_Li16_dict(LineParams_cross)
+                integrand_P_shot_noise = integrand_P_shot_noise * np.exp((line_dict['alpha']**-2-line_dict['alpha']**-1)*line_dict['sigma_SFR'].value**2*np.log(10)**2)
 
         return integrand_P_shot_noise
 
@@ -385,10 +459,7 @@ class get_LIM_coefficients:
         # --- #
         # stochasticity computation
         if LineParams.LINE_MODEL == 'Li16':
-            if LineParams.line_dict is None:
-                line_dict = Li16_C021_params
-            else:
-                line_dict = LineParams.line_dict
+            line_dict = _resolve_Li16_dict(LineParams)
 
             sigma_L = (LineParams.sigma_LMh**2 + (np.log(10) * line_dict['sigma_SFR'].value/line_dict['alpha'])**2)**0.5
 
@@ -406,50 +477,59 @@ class get_LIM_coefficients:
             #  for a pure lognormal the numerical integration from the old version is unnecessary , the mean is analytic
             L_of_Mh = 10.**log10_L * np.exp(sigma_L**2 / 2.)
 
-        L_of_Mh[dotM < 1e-20] = 0.
+        # L_of_Mh and dotM do not always have the same shape (e.g. models
+        # that depend on Mh only, such as Yang21/COMAP_fiducial, return a mass-only
+        # array while dotM is (nz, nM)). Broadcast before masking.
+        L_of_Mh, dotM_b = np.broadcast_arrays(np.asarray(L_of_Mh, dtype=float), dotM)
+        L_of_Mh = np.where(dotM_b < 1e-20, 0., L_of_Mh)
 
         return L_of_Mh
 
 
-    # used if burstiness is on 
-    def sigPS_at_M(self, LineParams, massVector):
-        
-        sigPS = LineParams.sigPS_piv_bursty + LineParams.dsigPS_dlog10M_bursty * (np.log10(massVector) - LineParams.log10M_piv_bursty)
+    # ----------------------------------------------------------------- #
+    # Burstiness diagnostics (arXiv:2605.13967). The machinery itself lives in
+    # burstiness_LIM.py; these are the observables the paper defines.
+    # ----------------------------------------------------------------- #
 
-        self.sPS = np.maximum(sigPS, LineParams.sigPS_cap_bursty)
+    def B_lambda(self):
+        """Mass-integrated shot-noise boost B_lambda(z), Eq. 7 of arXiv:2605.13967.
 
-        self.sx2 = 0.5 * self.sPS**2
-
-        return 1
-
-
-    def VarL_bursty(self, LineParams):
-            
-        integrand = lambda s: (LineParams.t_Myr_per_line - s) * (np.exp(self.sx2 * np.exp(-s / LineParams.tauPS_Myr_bursty)) - 1.0)
-
-        V_top_hat, _ = quad_vec(integrand, 0.0, LineParams.t_Myr_per_line, limit=200, epsabs=1e-10, epsrel=1e-8)
-
-        self.V_lambda_burst = V_top_hat * 2. / LineParams.t_Myr_per_line**2
-
-        return 1
+        The Lbar^2-weighted average of the per-halo boost over the halo mass function,
+        i.e. simply P_shot / P_shot|deterministic on this code's own HMF and L(Mh).
+        Array over zintegral. Equals 1 identically when BURSTY_FLAG is False and there
+        is no lognormal scatter.
+        """
+        return self.shot_noise / self.shot_noise_det
 
 
-    def CovL_bursty(self, LineParams, LineParams_cross):
+    def sigma_L_equivalent_dex(self):
+        """The mass-independent lognormal scatter that reproduces B_lambda(z), in dex.
 
-        def L(val):
-            if val >= 0:
-                return min(LineParams.t_Myr_per_line - val, LineParams_cross.t_Myr_per_line) if val < LineParams.t_Myr_per_line else 0.0
-            else:
-                return min(LineParams_cross.t_Myr_per_line + val, LineParams.t_Myr_per_line) if val > -LineParams_cross.t_Myr_per_line else 0.0
-            
-        integrand = lambda val: L(val) * (np.exp(self.sx2 * np.exp(-abs(val) / LineParams.tauPS_Myr_bursty)) - 1.0)
+        Standard LIM forecasts adopt sigma_L ~ 0.3-0.5 dex; this puts the burstiness
+        prediction on the same axis. Array over zintegral.
+        """
+        return burstiness_LIM.sigma_L_equivalent_dex(self.B_lambda())
 
-        val_neg, _ = quad_vec(integrand, -LineParams_cross.t_Myr_per_line, 0.0, limit=200, epsabs=1e-12, epsrel=1e-9)
-        val_pos, _ = quad_vec(integrand,  0.0, LineParams.t_Myr_per_line, limit=200, epsabs=1e-12, epsrel=1e-9)
 
-        self.Cov_l1l2_burst = (val_neg + val_pos) / (LineParams.t_Myr_per_line * LineParams_cross.t_Myr_per_line)
+    def shot_noise_weight(self, CosmoParams, AstroParams, LineParams, HMFinterp, z,
+                          LineParams_cross=None):
+        """dn/dlogMh * Lbar1(Mh,z) * Lbar2(Mh,z): the weight of the shot-noise integral.
 
-        return 1
+        This is the kernel that decides WHICH halos the boost is averaged over, so it
+        is what you plot to see where B_lambda comes from, and what R_cross needs.
+        Returns an array on HMFinterp.Mhtab.
+        """
+        Mh = HMFinterp.Mhtab[np.newaxis, :]
+        zz = np.atleast_2d(np.asarray(z, dtype=float)).reshape(-1, 1)
+
+        if LineParams_cross is None:
+            w = self.P_shot_noise_integrand(False, CosmoParams, AstroParams, LineParams,
+                                            HMFinterp, Mh, zz, deterministic=True)
+        else:
+            w = self.P_shot_noise_cross_integrand(False, CosmoParams, AstroParams, LineParams,
+                                                  LineParams_cross, HMFinterp, Mh, zz,
+                                                  cov_ln=None, deterministic=True)
+        return np.squeeze(w)
 
 
     def __getattr__(self, name):
