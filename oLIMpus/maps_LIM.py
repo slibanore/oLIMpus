@@ -5,6 +5,7 @@ BGU - June 2026
 """
 
 from oLIMpus.inputs_LIM import * 
+from oLIMpus import coefficients_LIM
 from oLIMpus.coefficients_LIM import get_LIM_coefficients
 from oLIMpus.correlations_LIM import Power_Spectra_LIM
 
@@ -80,7 +81,8 @@ class CoevalBox_LIM_analytical:
 
     def __post_init__(self, CosmoParams, LineParams, CoeffStructure, PowerSpectra):
 
-        _iz = z21_utilities.find_nearest_idx(CoeffStructure.zintegral, self.input_z)
+        _iz = int(np.argmin(np.abs(CoeffStructure.zintegral - np.atleast_1d(self.input_z)[0])))
+        self.z = CoeffStructure.zintegral[_iz]
         self._klist = PowerSpectra.klist_PS
         self._k3over2pi2 = self._klist**3/(2*np.pi**2)
 
@@ -99,18 +101,21 @@ class CoevalBox_LIM_analytical:
         else:
             self._Pnu = PowerSpectra._Pk_LIM_RSD[_iz,:]
 
-        Pnu_interp = spline(self._klist,self._Pnu)
+        _Pnu_raw = interp1d(self._klist, self._Pnu, fill_value=0.0, bounds_error=False)
+        Pnu_interp = lambda kk: np.maximum(_Pnu_raw(kk), 0.0)
 
-        norm = Pnu_interp(0.1)
+        # the lognormal must be anchored on Inu_bar, i.e. the field that is
+        # forced positive is delta_I = I/Inu_bar - 1. 
+        norm = self.Inu_bar**2
 
         pb = pbox.LogNormalPowerBox(
-            N=self.ncells,                     
-            dim= 3,                     
-            pk = lambda k: Pnu_interp(k)/norm, 
-            boxlength = self.input_boxlength,           
+            N=self.ncells,
+            dim= 3,
+            pk = lambda k: Pnu_interp(k)/norm,
+            boxlength = self.input_boxlength,
             seed = self.seed,
         )
-        self.Inu_box_noiseless = pb.delta_x()*np.sqrt(norm) + self.Inu_bar
+        self.Inu_box_noiseless = self.Inu_bar * (1. + pb.delta_x())
 
         # create shot noise box
         if LineParams.shot_noise:
@@ -125,7 +130,7 @@ class CoevalBox_LIM_analytical:
                 seed = self.seed+2, # uncorrelated from the density field
             )
 
-            self.shotnoise_box = pb_shot.delta_x() + CoeffStructure.shot_noise[_iz] # shot noise box
+            self.shotnoise_box = pb_shot.delta_x()
         else:
             self.shotnoise_box = np.zeros_like(self.Inu_box_noiseless)
 
@@ -146,11 +151,11 @@ def generate_density_pb(iz, input_boxlength, ncells, seed, _klist,_Pd):
 
     density = np.zeros((ncells,ncells,ncells))
 
-    Pd_spl = spline(np.log(_klist), np.log(_Pd[iz])) # density at min z
+    Pd_int = interp1d(_klist, _Pd[iz], fill_value=0.0, bounds_error=False)
     pb = pbox.PowerBox(
         N=ncells,
         dim=3,
-        pk = lambda k: np.exp(Pd_spl(np.log(k))),
+        pk = lambda k: np.maximum(Pd_int(k), 0.0),
         boxlength = input_boxlength,
         seed = seed
         )
@@ -196,9 +201,10 @@ class CoevalBox_percell:
     _k3over2pi2: np.ndarray = _field(init=False)
     Inu_bar: np.ndarray = _field(init=False)
 
-    def __post_init__(self, CosmoParams, AstroParams, LineParams, HMFinterp, CoeffStructure, PowerSpectra):
+    def __post_init__(self, LineParams, CosmoParams, AstroParams, CoeffStructure, PowerSpectra, HMFinterp):
 
-        _iz = z21_utilities.find_nearest_idx(CoeffStructure.zintegral, self.input_z)[0]
+        _iz = int(np.argmin(np.abs(CoeffStructure.zintegral - np.atleast_1d(self.input_z)[0])))
+        self.z = CoeffStructure.zintegral[_iz]
         self._klist = PowerSpectra.klist_PS
         self._k3over2pi2 = self._klist**3/(2*np.pi**2)
 
@@ -225,7 +231,7 @@ class CoevalBox_percell:
 
         mArray, deltaArray_Mh = np.meshgrid(HMFinterp.Mhtab, deltaArray, indexing = 'ij', sparse = True)
 
-        sigmaM = HMFinterp.sigmaintlog((np.log(mArray),self.input_z))
+        sigmaM = HMFinterp.sigmaintlog((np.log(mArray), self.z))
 
         modSigmaSq = ne.evaluate('sigmaM*sigmaM - sigmaR*sigmaR')
         indexTooBig = (modSigmaSq <= 0.0)
@@ -240,11 +246,18 @@ class CoevalBox_percell:
         EPS_HMF_corr = ne.evaluate('(nu/nu0) * (sigmaM/modSigma)* (sigmaM/modSigma) * exp(-a_corr_EPS * (nu*nu-nu0*nu0)/2. )')
         #print('Done EPS corr in ' + str(time.time() - start))
 
-        HMF_curr = np.exp(HMFinterp.logHMFint((np.log(mArray),self.input_z)))
+        # Same normalisation as coefficients_LIM.compute_sigmaR_nu_LIM, so the benchmark
+        # box and the analytic model describe the same conditional HMF. Note sigmaR here
+        # is measured from the box itself, not sigmaofRtab_LIM.
+        if LineParams.normalize_CEPS:
+            EPS_HMF_corr = EPS_HMF_corr / coefficients_LIM.EPS_HMF_norm(
+                sigmaM, sigmaR, delta_crit_ST, a_corr_EPS)
+
+        HMF_curr = np.exp(HMFinterp.logHMFint((np.log(mArray), self.z)))
 
         # ---- #
         # produce SFRD box
-        SFRtab_currII = CoeffStructure.SFR(CosmoParams, AstroParams, HMFinterp, mArray, self.input_z, 2, False, False)    
+        SFRtab_currII = CoeffStructure.SFR(CosmoParams, AstroParams, HMFinterp, mArray, self.z, 2, False, False)
 
         integrand = EPS_HMF_corr *  HMF_curr * SFRtab_currII * HMFinterp.Mhtab[:,np.newaxis]
 
@@ -258,7 +271,7 @@ class CoevalBox_percell:
 
         # ---- #
         # LIM box
-        integrand_LIM = EPS_HMF_corr * HMF_curr * CoeffStructure.LineLuminosity(SFRtab_currII, CosmoParams, AstroParams, LineParams, HMFinterp, mArray, self.input_z)  * HMFinterp.Mhtab[:,np.newaxis]
+        integrand_LIM = EPS_HMF_corr * HMF_curr * CoeffStructure.LineLuminosity(SFRtab_currII, CosmoParams, AstroParams, LineParams, HMFinterp, mArray, self.z)  * HMFinterp.Mhtab[:,np.newaxis]
 
         rhoLbox_flattened = np.trapezoid(integrand_LIM, HMFinterp.logtabMh, axis = 0) 
 
@@ -304,258 +317,6 @@ class CoevalBox_percell:
 
             self.density_smooth = z21_utilities.smooth_box(self.density, Resolution, self.input_boxlength, self.ncells)
 
-"""
-
-TODO : THESE HAVE TO BE FIXED 
-
-def build_lightcone(which_lightcone,
-             input_zvals,
-             Lbox, 
-             Ncell, 
-             R,
-             seed, 
-             analytical, 
-            correlations_21,
-            coefficients_21,
-            PS21,
-            correlations,
-            coefficients,
-            PSLIM,
-            Rmin_bubbles,
-            compute_mass_weighted_xHII,
-            compute_include_partlion,
-            LineParams1,
-            AstroParams, 
-            CosmoParams,
-            HMFintclass,
-            ClassyCosmo,
-            folder=None,
-             include_label = '', 
-            RSD=0
-             ):
-
-    if folder is None:
-        save_path = os.path.join(os.getcwd(), "oLIMpus")
-        folder_out = os.path.abspath(os.path.join(save_path, "..", 'analysis_' + str(Lbox) + ',' + str(Ncell) + ',' + str(R) ))
-
-        if not os.path.exists(folder_out):
-            os.makedirs(folder_out)
-
-        folder = folder_out + '/lightcones'
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-
-    filename_all = folder + which_lightcone + include_label + '.pkl'
-    print(filename_all)
-    if os.path.exists(filename_all):
-        with open(filename_all, 'rb') as handle:
-            lightcone = pickle.load(handle)
-            return lightcone
-    print('Running lightcone...')
-    zvals = input_zvals[::-1]
-    z_long = np.linspace(zvals[0],zvals[-1],1000)
-    lightcone = np.zeros((Ncell, Ncell, len(z_long)))
-
-    box = []
-    reionization_map_partial, ion_frac_withpartial = get_reio_field(
-    zvals, coefficients_21, correlations_21, AstroParams, CosmoParams, ClassyCosmo, HMFintclass, Lbox, Ncell, Rmin_bubbles, seed, compute_mass_weighted_xHII,compute_include_partlion)
-    for zi in tqdm(zvals):
-
-        box.append(lightcone_single_z(zi, zvals, Lbox,Ncell,R,seed,which_lightcone, analytical, coefficients,correlations, PSLIM, coefficients_21, PS21, reionization_map_partial[list(zvals).index(zi)], ion_frac_withpartial[list(zvals).index(zi)], HMFintclass,CosmoParams,AstroParams,LineParams1,RSD))
-        
-    lightcone[:, :, 0] = box[0][:, :, 0]        
-    # Loop over each z in z_long
-    for z_idx, zi in (enumerate(z_long[1:],start=1)):
-        # Find which two matrices to interpolate between
-        idx = np.searchsorted(zvals, zi) - 1
-        idx = np.clip(idx, 0, len(zvals) - 2)  # Keep index within bounds
-        
-        z1, z2 = zvals[idx], zvals[idx + 1]
-        mat1, mat2 = box[idx], box[idx + 1]
-        
-        # Interpolation weight
-        w = (zi - z1) / (z2 - z1)
-        
-        # Interpolate between contiguous slices
-        lightcone[:, :, z_idx] = (1 - w) * mat1[:, :, z_idx % Ncell] + w * mat2[:, :, z_idx % Ncell]
-
-    lightcone[np.isnan(lightcone)] = 0.
-
-    with open(filename_all, 'wb') as handle:
-        pickle.dump(lightcone,handle)
-    
-
-    return lightcone
-
-
-def lightcone_single_z(zi, zvals, Lbox, Nbox, Resolution, seed, which_lightcone, analytical, LIM_coeff, LIM_corr, PSLIM, coefficients_21, PS21, reionization_map_partial, ion_frac_withpartial, HMFintclass, CosmoParams,AstroParams,LineParams,RSD=0):
-
-    if which_lightcone == 'T21' or which_lightcone == 'T21_only':
-        if analytical and zi == zvals[0]:
-            print('Warning! The bubble part is not analytical')
-        else:
-            if zi == zvals[0]:
-                print('Warning! The T21 map is only  analytical, except for the bubble part')
-
-        if which_lightcone == 'T21_only':
-            box = CoevalBox_T21reionization(coefficients_21,PS21,zi,reionization_map_partial, ion_frac_withpartial,Lbox,Nbox,seed,MAP_T21_FULL=True,).T21_map_only
-        else:
-            box = CoevalBox_T21reionization(coefficients_21,PS21,zi,reionization_map_partial, ion_frac_withpartial,Lbox,Nbox,seed,MAP_T21_FULL=True,).T21_map
-
-    elif which_lightcone == 'density':
-        if not analytical and zi == zvals[0]:
-            print('Warning! The density map is only  analytical')
-
-        box = CoevalBox_LIM_analytical(LIM_coeff, LIM_corr, PSLIM, LineParams, zi, Resolution, Lbox, Nbox, seed, RSD, True).density_box
-
-    elif which_lightcone == 'xHI':
-        if analytical and zi == zvals[0]:
-            print('Warning! The xHI map cannot be computed analytically')
-
-        box = CoevalBox_T21reionization(coefficients_21,PS21,zi,reionization_map_partial, ion_frac_withpartial,Lbox,Nbox,seed,MAP_T21_FULL=True).xH_box
-
-    elif which_lightcone == 'SFRD':
-        box = CoevalBox_percell( LIM_coeff, LIM_corr, PSLIM, coefficients_21, LineParams, AstroParams, CosmoParams, HMFintclass, zi, Resolution, Lbox, Nbox, seed).SFRD_box
-
-    elif which_lightcone == 'rho_L':
-        box = CoevalBox_percell( LIM_coeff, LIM_corr, PSLIM, coefficients_21, LineParams, AstroParams, CosmoParams, HMFintclass, zi, Resolution, Lbox, Nbox, seed).rhoL_box
-
-    else:
-
-        if analytical:
-            all_boxes = CoevalBox_LIM_analytical(LIM_coeff, LIM_corr, PSLIM, LineParams, zi, Resolution, Lbox, Nbox, seed, RSD,False)
-
-        else:
-            all_boxes = CoevalBox_percell( LIM_coeff, LIM_corr, PSLIM, coefficients_21, LineParams, AstroParams, CosmoParams, HMFintclass, zi, Resolution, Lbox, Nbox, seed)
-
-        if which_lightcone == 'LIM':
-            box = all_boxes.Inu_box_noiseless
-        elif which_lightcone == 'LIM_SN':
-            box = all_boxes.Inu_box
-        elif which_lightcone == 'LIM_smooth':
-            box = all_boxes.Inu_box_smooth
-
-        else:
-            print('Check lightcone')
-            return 
-
-    return box
-
-def plot_lightcone(which_lightcone,
-             input_zvals,
-             Lbox, 
-             Ncell, 
-             R,
-             seed, 
-             analytical, 
-            correlations_21,
-            coefficients_21,
-            PS21,
-            correlations,
-            coefficients,
-            PSLIM,
-            Rmin_bubbles,
-            compute_mass_weighted_xHII,
-            compute_include_partlion,
-            LineParams,
-            AstroParams, 
-            CosmoParams,
-            HMFintclass,
-            ClassyCosmo,
-            RSD,
-            folder=None,       
-            include_label='',
-            input_text_label = None,
-             _islice = 0,
-            ax = None,
-            fig = None,
-            cmap = None,
-            **kwargs
-            ):
-
-    zvals = input_zvals[::-1]
-
-    lightcone = build_lightcone(which_lightcone,
-             input_zvals,
-             Lbox, 
-             Ncell, 
-             R,
-             seed, 
-             analytical, 
-            correlations_21,
-            coefficients_21,
-            PS21,
-            correlations,
-            coefficients,
-            PSLIM,
-            Rmin_bubbles,
-            compute_mass_weighted_xHII,
-            compute_include_partlion,
-            LineParams,
-            AstroParams, 
-            CosmoParams,
-            HMFintclass,
-            ClassyCosmo,
-            folder=folder,
-            RSD = RSD,
-             include_label = include_label, 
-             )
-    
-    if which_lightcone == 'density':
-        text_label_helper = r'$\delta$'
-        use_cmap = 'magma'
-        vmin = -0.6
-        vmax = 0.6
-    elif which_lightcone == 'SFRD':
-        text_label_helper = r'$\rm SFRD\,[M_\odot\,{\rm /yr/Mpc^{3})}]$'
-        use_cmap = 'bwr'
-        vmin = 1e-3
-        vmax = 1e0
-    elif which_lightcone == 'xHI':
-        text_label_helper = r'$x_{\rm HI}$'
-        use_cmap = 'gray'
-        vmin = 0.
-        vmax = 1.
-    elif which_lightcone == 'T21' or which_lightcone == 'T21_only':
-        text_label_helper = r'$T_{21}\,[{\mu\rm K}]$'
-        use_cmap = eor_colour
-        vmin = min_value
-        vmax = max_value
-    elif which_lightcone == 'LIM':
-        text_label_helper = r'$I_{\rm %s}\,[{\rm Jy/sr}]$'%LineParams.LINE
-        use_cmap = LIM_colour_1 if LineParams.LINE[:4] == 'OIII' else LIM_colour_2
-        vmin = 0.
-        vmax = 0.5*np.max(lightcone)
-    else:
-        print('Check lightcone')
-        return 
-
-    if cmap:
-        use_cmap = cmap
-
-    if ax is None or fig is None:
-        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 2))
-
-    if input_text_label is None:
-        text_label = text_label_helper
-    else:
-        text_label = text_label_helper + ',\,' + input_text_label
-
-    extent = [zvals[0], zvals[-1], 0, Lbox]
-
-    if which_lightcone == 'SFRD':
-        im = ax.imshow(lightcone[:,_islice,:], aspect='auto', extent=extent, cmap=use_cmap, origin='lower', norm = LogNorm(vmin=vmin, vmax=vmax))    
-    else:
-        im = ax.imshow(lightcone[:,0,:], aspect='auto', extent=extent, cmap=use_cmap, origin='lower', vmin = vmin,vmax=vmax)
-
-    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, format="%.0e")
-    ax.set_ylabel(text_label,fontsize=15)
-    ax.set_xlabel(r'$z$',fontsize=15)
-
-    plt.tight_layout()
-
-    return 
-"""
 
 
 """
@@ -566,11 +327,7 @@ Debugged/optimized version. Changes vs. previous draft are marked
 ### FIX n  (bugs)  and  ### OPT n  (optimizations); see accompanying notes.
 """
 
-import numpy as np
-from scipy.interpolate import interp1d
-from scipy.interpolate import InterpolatedUnivariateSpline as spline
-
-from . import z21_utilities   # adjust import to your package layout
+from zeus21 import z21_utilities
 
 
 class generate_asym_boxes:
@@ -1081,3 +838,167 @@ class generate_asym_boxes:
 
 
 
+
+
+# --------------------------------------------------------------------------- #
+# Lightcones
+#
+# Rewritten from the block that was commented out as "TODO: THESE HAVE TO BE
+# FIXED". The old version took ~20 positional arguments, rebuilt the bubble mass
+# function once per redshift, and indexed transverse slices with
+# `mat[:, :, z_idx % Ncell]`, where z_idx ran over a 1000-point output grid --
+# so the LoS slice advanced with the OUTPUT array index rather than with
+# comoving distance, and the box repeated every Ncell output pixels regardless
+# of the cell size.
+#
+# Here the LoS axis is comoving distance (the physical thing an observation
+# samples): the output grid is uniform in chi with the box cell size, the
+# transverse slice advances as round(chi/dcell) % ncells, and the two coeval
+# boxes that bracket each chi are interpolated linearly in chi. Coeval boxes
+# must share a seed so their structures are aligned; that is what makes the
+# interpolation meaningful, and it is also why the pattern still repeats every
+# ncells cells along the LoS (as in 21cmFAST). Use a large enough ncells that
+# the repetition is outside the scales you care about.
+# --------------------------------------------------------------------------- #
+
+
+def lightcone_los_grid(CosmoParams, zmin, zmax, input_boxlength, ncells):
+    """Line-of-sight grid, uniform in comoving distance with the box cell size.
+
+    Parameters
+    ----------
+    CosmoParams : zeus21.Cosmo_Parameters
+    zmin, zmax : float
+        Redshift range of the lightcone.
+    input_boxlength, ncells : float, int
+        Geometry of the coeval boxes; the LoS pixel size is input_boxlength/ncells.
+
+    Returns
+    -------
+    chi_los : ndarray
+        Comoving distances of the LoS pixels, in Mpc, increasing.
+    z_los : ndarray
+        Redshift of each LoS pixel.
+    """
+    dcell = input_boxlength / ncells
+    chi_min = cosmology.chi_of_redshift(CosmoParams, zmin)
+    chi_max = cosmology.chi_of_redshift(CosmoParams, zmax)
+    n_los = int(np.floor((chi_max - chi_min) / dcell)) + 1
+    chi_los = chi_min + dcell * np.arange(n_los)
+    z_los = cosmology.redshift_of_chi(CosmoParams, chi_los)
+    return chi_los, z_los
+
+
+def build_lightcone(coeval_boxes, zvals, CosmoParams, input_boxlength, ncells,
+                    zmin=None, zmax=None):
+    """Assemble a lightcone from a stack of coeval boxes.
+
+    Parameters
+    ----------
+    coeval_boxes : array-like, shape (nz, ncells, ncells, ncells)
+        Coeval boxes of the SAME quantity, generated with the SAME seed, one per
+        entry of zvals. The third axis is taken as the line of sight.
+    zvals : array-like, shape (nz,)
+        Redshifts of the coeval boxes. Must be strictly increasing.
+    CosmoParams : zeus21.Cosmo_Parameters
+    input_boxlength, ncells : float, int
+    zmin, zmax : float, optional
+        Redshift range of the output. Defaults to the range spanned by zvals; the
+        function never extrapolates outside it.
+
+    Returns
+    -------
+    lightcone : ndarray, shape (ncells, ncells, n_los)
+    z_los : ndarray, shape (n_los,)
+    """
+    coeval_boxes = np.asarray(coeval_boxes)
+    zvals = np.asarray(zvals, dtype=float)
+
+    if coeval_boxes.shape[0] != zvals.size:
+        raise ValueError("coeval_boxes has %d boxes but %d redshifts were given"
+                         % (coeval_boxes.shape[0], zvals.size))
+    if np.any(np.diff(zvals) <= 0):
+        raise ValueError("zvals must be strictly increasing")
+    if zvals.size < 2:
+        raise ValueError("a lightcone needs at least two coeval boxes")
+
+    zmin = zvals[0] if zmin is None else max(zmin, zvals[0])
+    zmax = zvals[-1] if zmax is None else min(zmax, zvals[-1])
+
+    chi_los, z_los = lightcone_los_grid(CosmoParams, zmin, zmax, input_boxlength, ncells)
+    chi_box = cosmology.chi_of_redshift(CosmoParams, zvals)
+
+    dcell = input_boxlength / ncells
+    # transverse slice advances with comoving distance, and wraps around the box
+    islice = (np.rint(chi_los / dcell).astype(int)) % ncells
+
+    # bracketing coeval boxes and the linear-in-chi weight
+    ihi = np.clip(np.searchsorted(chi_box, chi_los, side='left'), 1, zvals.size - 1)
+    ilo = ihi - 1
+    w = (chi_los - chi_box[ilo]) / (chi_box[ihi] - chi_box[ilo])
+
+    lightcone = np.empty((ncells, ncells, chi_los.size), dtype=coeval_boxes.dtype)
+    for j in range(chi_los.size):
+        lightcone[:, :, j] = ((1. - w[j]) * coeval_boxes[ilo[j], :, :, islice[j]]
+                              + w[j] * coeval_boxes[ihi[j], :, :, islice[j]])
+
+    return lightcone, z_los
+
+
+def lightcone_boxes_LIM(CosmoParams, LineParams, CoeffStructure, PowerSpectra, zvals,
+                        input_boxlength=300., ncells=100, seed=1234, with_shot_noise=True,
+                        smooth_box=False):
+    """Stack of LIM intensity coeval boxes, one per entry of zvals, sharing a seed.
+
+    Returns
+    -------
+    boxes : ndarray, shape (nz, ncells, ncells, ncells), in Jy/sr (or uK).
+    """
+    boxes = np.empty((len(zvals), ncells, ncells, ncells))
+    for i, zz in enumerate(tqdm(zvals, desc='LIM coeval boxes')):
+        b = CoevalBox_LIM_analytical(CosmoParams=CosmoParams, LineParams=LineParams,
+                                     CoeffStructure=CoeffStructure, PowerSpectra=PowerSpectra,
+                                     input_z=zz, input_boxlength=input_boxlength,
+                                     ncells=ncells, seed=seed, smooth_box=smooth_box)
+        if smooth_box:
+            boxes[i] = b.Inu_box_smooth if with_shot_noise else b.Inu_box_noiseless_smooth
+        else:
+            boxes[i] = b.Inu_box if with_shot_noise else b.Inu_box_noiseless
+    return boxes
+
+
+def plot_lightcone(lightcone, z_los, input_boxlength, label='', cmap=None,
+                   vmin=None, vmax=None, log=False, islice=0, ax=None, fig=None):
+    """Plot one transverse slice of a lightcone as a function of redshift.
+
+    Parameters
+    ----------
+    lightcone : ndarray, shape (ncells, ncells, n_los)
+    z_los : ndarray
+    input_boxlength : float
+    label : str
+        Colourbar label (LaTeX allowed).
+    log : bool
+        Use a logarithmic colour scale (values <= 0 are masked).
+    """
+    if ax is None or fig is None:
+        fig, ax = plt.subplots(1, 1, figsize=(9, 2.2))
+
+    img = lightcone[:, islice, :]
+    extent = [z_los[0], z_los[-1], 0, input_boxlength]
+
+    if log:
+        pos = img[img > 0]
+        _vmin = vmin if vmin is not None else np.percentile(pos, 1)
+        _vmax = vmax if vmax is not None else np.percentile(pos, 99)
+        im = ax.imshow(np.ma.masked_less_equal(img, 0.), aspect='auto', extent=extent,
+                       cmap=cmap, origin='lower', norm=LogNorm(vmin=_vmin, vmax=_vmax))
+    else:
+        im = ax.imshow(img, aspect='auto', extent=extent, cmap=cmap, origin='lower',
+                       vmin=vmin, vmax=vmax)
+
+    cb = fig.colorbar(im, ax=ax, fraction=0.025, pad=0.01)
+    cb.set_label(label, fontsize=12)
+    ax.set_xlabel(r'$z$', fontsize=13)
+    ax.set_ylabel(r'$[{\rm Mpc}]$', fontsize=13)
+    return fig, ax
