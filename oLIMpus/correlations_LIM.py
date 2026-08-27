@@ -157,7 +157,8 @@ class Power_Spectra_LIM:
 
                 shot_noise_cross =  scale_power_spectrum.value * scale_power_spectrum_cross.value * np.trapezoid(integrand_shot_noise_cross, HMFinterp.logtabMh, axis = 1) 
 
-                shot_noise_cross *= (LIMcoeffs._corrfactorEulerian_LIM * LIMcoeffs_cross._corrfactorEulerian_LIM)
+                if (UserParams.C2_RENORMALIZATION_FLAG==True):
+                    shot_noise_cross *= (LIMcoeffs._corrfactorEulerian_LIM * LIMcoeffs_cross._corrfactorEulerian_LIM)
 
                 self.P_shot_noise = shot_noise_cross[:,np.newaxis] * np.ones((len(LIMcoeffs.zintegral),len(self.klist_PS)))
                 
