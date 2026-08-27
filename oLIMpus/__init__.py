@@ -2,8 +2,6 @@ from importlib.metadata import version as _installed_version
 
 from ._version import __version__
 
-from zeus21 import *
-
 print(f"oLIMpus version {__version__}")
 print(f"zeus21 version {_installed_version('zeus21')}")
 
