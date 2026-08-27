@@ -1,13 +1,15 @@
+from importlib.metadata import version as _installed_version
 
-from importlib.metadata import version
+from ._version import __version__
 
 from zeus21 import *
 
-print(f"oLIMpus version {version('oLIMpus')}")
-print(f"zeus21 version {version('zeus21')}")
+print(f"oLIMpus version {__version__}")
+print(f"zeus21 version {_installed_version('zeus21')}")
 
 from .inputs_LIM import *
 from .luminosities_LIM import *
+from .burstiness_LIM import *
 from .coefficients_LIM import *
 from .correlations_LIM import *
 from .maps_LIM import *
