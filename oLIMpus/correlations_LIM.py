@@ -39,6 +39,7 @@ class Power_Spectra_LIM:
 
     def __init__(self,  UserParams, CosmoParams, LineParams, LIMcoeffs, HMFinterp = None, AstroParams=None, LineParams_cross = None, LIMcoeffs_cross = None, cov_ln_cross=None, RSD_MODE = 1, SIGMA_FOG = 0.):
                  
+        self._xi2P = None
         self.get_xi_R0(CosmoParams, LineParams, LineParams_cross)
         
         self.klist_PS = CosmoParams._klistCF # array of k for the power spectrum 
@@ -77,7 +78,7 @@ class Power_Spectra_LIM:
             # compute the correlations
             self.get_all_corrs_LIM(UserParams, CosmoParams, LineParams, LIMcoeffs, LineParams_cross, LIMcoeffs_cross)
 
-            self._Pk_LIM = z21_utilities.get_list_PS(CosmoParams, self._xiR1R2_LIM,  LIMcoeffs.zintegral)
+            self._Pk_LIM = self.get_list_PS_fast(CosmoParams, self._xiR1R2_LIM)
             self._Pk_LIM.T[:len(CosmoParams._Rtabsmoo)-CosmoParams.indexmaxNL] = self._Pk_LIM_lin.T[:len(CosmoParams._Rtabsmoo)-CosmoParams.indexmaxNL]            
 
 
@@ -85,11 +86,19 @@ class Power_Spectra_LIM:
         self.Deltasq_LIM = self._Pk_LIM * self._k3over2pi2 
 
     # define the NON linear cross LIM-delta power spectrum assuming a lognormal for the delta
-        if (LineParams._R < UserParams.MAX_R_NONLINEAR):   
-            self._Pk_deltaLIM = z21_utilities.get_list_PS(CosmoParams, self._xiR1_deltaLIM, LIMcoeffs.zintegral)
+        # for _R >= MAX_R_NONLINEAR get_all_corrs_LIM is never called, so
+        # _xiR1_deltaLIM does not exist and _Pk_deltaLIM was left undefined -> the
+        # clipping line below raised AttributeError. Fall back to the linear result.
+        if (LineParams._R < UserParams.MAX_R_NONLINEAR):
+            self._Pk_deltaLIM = self.get_list_PS_fast(CosmoParams, self._xiR1_deltaLIM)
+        else:
+            self._Pk_deltaLIM = np.array(self._Pk_deltaLIM_lin)
         if LineParams_cross is not None:
-            self._Pk_deltaLIM_cross = z21_utilities.get_list_PS(CosmoParams, self._xiR1_deltaLIM_cross, LIMcoeffs.zintegral)
-        
+            if (LineParams_cross._R < UserParams.MAX_R_NONLINEAR):
+                self._Pk_deltaLIM_cross = self.get_list_PS_fast(CosmoParams, self._xiR1_deltaLIM_cross)
+            else:
+                self._Pk_deltaLIM_cross = np.array(self._Pk_deltaLIM_lin_cross)
+
         self._Pk_deltaLIM[self._Pk_deltaLIM < 0.] = 0. # this is to avoid when using large smoothing that drops below 0
 
     # add RSD             
@@ -128,15 +137,11 @@ class Power_Spectra_LIM:
 
             else:
 
-                if LineParams.BURSTY_FLAG:
-                    if LineParams_cross.BURSTY_FLAG:
-                        LIMcoeffs.CovL_bursty(LineParams, LineParams_cross)
-                    else:
-                        print('Check BURSTY_FLAG -- cannot have two different values in LP and LP_cross')
-                else:
-                    if LineParams_cross.BURSTY_FLAG:
-                        print('Check BURSTY_FLAG -- cannot have two different values in LP and LP_cross')
-                    
+                if LineParams.BURSTY_FLAG != LineParams_cross.BURSTY_FLAG:
+                    raise ValueError('BURSTY_FLAG must match between the two lines.')
+
+                # deterministic (halo-discreteness) and full same-halo cross moments
+                integrand_shot_noise_cross_det = LIMcoeffs.P_shot_noise_cross_integrand(False,CosmoParams,AstroParams,LineParams,LineParams_cross,HMFinterp,HMFinterp.Mhtab[np.newaxis,:], LIMcoeffs.zintegral[:,np.newaxis], cov_ln=cov_ln_cross, deterministic=True)
                 integrand_shot_noise_cross = LIMcoeffs.P_shot_noise_cross_integrand(False,CosmoParams,AstroParams,LineParams,LineParams_cross,HMFinterp,HMFinterp.Mhtab[np.newaxis,:], LIMcoeffs.zintegral[:,np.newaxis], cov_ln=cov_ln_cross)
 
                 if LineParams.OBSERVABLE_LIM == 'Tnu':
@@ -155,10 +160,19 @@ class Power_Spectra_LIM:
 
                     scale_power_spectrum_cross = np.sqrt((((LIMcoeffs_cross.coeff1_LIM*u.Jy/u.steradian/u.Lsun/u.Mpc**-3)**2)*u.Lsun**2*u.Mpc**-3).to(u.Mpc**3 * u.Jy**2/u.steradian**2))
 
-                shot_noise_cross =  scale_power_spectrum.value * scale_power_spectrum_cross.value * np.trapezoid(integrand_shot_noise_cross, HMFinterp.logtabMh, axis = 1) 
+                _scale = scale_power_spectrum.value * scale_power_spectrum_cross.value
+                shot_noise_cross = _scale * np.trapezoid(integrand_shot_noise_cross, HMFinterp.logtabMh, axis = 1)
+                shot_noise_cross_det = _scale * np.trapezoid(integrand_shot_noise_cross_det, HMFinterp.logtabMh, axis = 1)
 
                 if (UserParams.C2_RENORMALIZATION_FLAG==True):
-                    shot_noise_cross *= (LIMcoeffs._corrfactorEulerian_LIM * LIMcoeffs_cross._corrfactorEulerian_LIM)
+                    _phi = (LIMcoeffs._corrfactorEulerian_LIM * LIMcoeffs_cross._corrfactorEulerian_LIM)
+                    shot_noise_cross *= _phi
+                    shot_noise_cross_det *= _phi
+
+                # kept as attributes so the cross boost, and hence the R diagnostic of
+                # arXiv:2605.13967 Eq. 11, can be read straight off the released code
+                self.shot_noise_cross = shot_noise_cross
+                self.shot_noise_cross_det = shot_noise_cross_det
 
                 self.P_shot_noise = shot_noise_cross[:,np.newaxis] * np.ones((len(LIMcoeffs.zintegral),len(self.klist_PS)))
                 
@@ -169,8 +183,35 @@ class Power_Spectra_LIM:
             self.P_shot_noise = 0.
 
         self._Pk_LIM_tot = self._Pk_LIM_RSD + self.P_shot_noise
-        
-    # define LIM window    
+
+
+    def R_cross(self, LIMcoeffs, LIMcoeffs_cross):
+        """Cross-line correlation coefficient of the bursty shot-noise excess.
+
+        Eq. 11 of arXiv:2605.13967:  R = Delta_12 / sqrt(Delta_1 Delta_2), with
+        Delta_ij = P_shot^ij / P_shot^ij|det - 1. The deterministic term and all
+        luminosity normalisations cancel, leaving a quantity that depends mainly on
+        tau_PS. Requires a cross run (LineParams_cross given) with shot noise on.
+        Array over zintegral.
+        """
+        d12 = self.shot_noise_cross / self.shot_noise_cross_det - 1.
+        d1 = LIMcoeffs.shot_noise / LIMcoeffs.shot_noise_det - 1.
+        d2 = LIMcoeffs_cross.shot_noise / LIMcoeffs_cross.shot_noise_det - 1.
+
+        return d12 / np.sqrt(d1 * d2)
+
+    
+    # z21_utilities.get_list_PS rebuilds the whole mcfit transform inside a
+    # python loop over redshift, even though rlist_CF is z-independent. Building it
+    # once and letting mcfit act on the last axis of the (nz, nr) array is ~150x
+    # faster and bit-for-bit identical.
+    def get_list_PS_fast(self, CosmoParams, xi_list):
+        if getattr(self, '_xi2P', None) is None:
+            self._xi2P = mcfit.xi2P(CosmoParams.rlist_CF, l=0, lowring=True)
+        _k, _Pk = self._xi2P(np.asarray(xi_list), extrap=False)
+        return _Pk
+
+    # define LIM window
     def get_LIM_window(self, LineParams, LIMcoeffs):
         "Returns the LIM linear window function for all z in zintegral"
 
@@ -271,7 +312,7 @@ class Power_Spectra_LIM:
                 windowR2_cross = z21_utilities.Window(CosmoParams._klistCF, LineParams_cross._R,self.WINDOWTYPE, ) # only one value for the resolution but defined for array on the ks
                 _Pksmooth_cross = np.array(CosmoParams._PklinCF) * windowR2_cross
 
-                self.rlist_CF, xi_R20_CF_cross = CosmoParams._xif(_Pksmooth, extrap = False) 
+                self.rlist_CF, xi_R20_CF_cross = CosmoParams._xif(_Pksmooth_cross, extrap = False)
                 xi_matter_R20_z0_cross = (xi_R20_CF_cross)[np.newaxis,:]
                 xi_matter_R20_z_cross = ne.evaluate('xi_matter_R20_z0_cross * growthRmatrix')
          
@@ -286,7 +327,7 @@ class Power_Spectra_LIM:
                     nonlinear_deltaLIM = ne.evaluate('exp(numerator_NL/denominator_NL - log_norm)-1')
 
                 else:
-                    nonlinear_deltaLIM = ne.evaluate('(exp(gammaR*xi_matter_R20_z_cross)-1)')
+                    nonlinear_deltaLIM = ne.evaluate('(exp(gammaR2*xi_matter_R20_z_cross)-1)')
 
                 self._xiR1_deltaLIM_cross = LIMcoeffs_cross.Inu_bar[:,np.newaxis] * nonlinear_deltaLIM
 
