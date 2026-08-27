@@ -1,13 +1,18 @@
 #!/bin/bash
-conda deactivate
-conda env remove --name oLIMpus --all -y
+set -e
+
+# Creates a conda environment named 'oLIMpus' with python 3.10 and installs the code.
+# CLASS must already be installed in that environment (see the README).
+
 conda create --name oLIMpus python=3.10 -y
-source $(conda info --base)/etc/profile.d/conda.sh
+eval "$(conda shell.bash hook)"
 conda activate oLIMpus
+
 conda install -y cython ipykernel pygments pexpect
 
-pip install --upgrade --force-reinstall --no-cache-dir --no-deps "zeus21 @ git+https://github.com/ZeusCosmo/Zeus21@zeus21_hack"
+# installs oLIMpus and, through install_requires, Zeus21 from the zeus21_hack branch
+pip install .
 
-pip install --upgrade .
+python -m ipykernel install --user --name oLIMpus --display-name "oLIMpus"
 
-echo "Conda environment 'oLIMpus' is set up and packages are installed."
+echo "Conda environment 'oLIMpus' is ready. Version: $(python -c 'import oLIMpus' 2>/dev/null | head -1)"

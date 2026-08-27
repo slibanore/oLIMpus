@@ -1,10 +1,14 @@
+# zeus21 must come from the zeus21_hack branch: oLIMpus v2 uses its Z_init / SFRD_class
+# API and its multi-redshift maps. `pip install .` installs it automatically through
+# install_requires; this line is here for `pip install -r requirements.txt` users.
+zeus21 @ git+https://github.com/ZeusCosmo/Zeus21@zeus21_hack
 numpy
 scipy
-sphinx
-myst_parser
+mcfit
+classy
 numexpr
 astropy
+pyfftw
+powerbox
 tqdm
 matplotlib
-powerbox
-pyfftw
