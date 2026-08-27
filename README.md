@@ -2,102 +2,123 @@
   <img src="oLIMpus/logo.jpeg" alt="oLIMpus Logo" width="300"/>
 </p>
 
-# oLIMpus: An Effective Model for Line Intensity Mapping Auto- and Cross- Power Spectra in Cosmic Dawn and Reionization
+# oLIMpus: An Effective Model for Line Intensity Mapping Auto- and Cross-Power Spectra in Cosmic Dawn and Reionization
 
 ---
 
-`oLIMpus` is an actively maintained and expanding Python-based framework for simulating line intensity mapping (LIM) signals during the epoch of reionization (EoR). It provides a fast and efficient way to compute **non-linear power spectra** of star-forming lines, and generates both **coeval boxes** and **lightcones**.
+`oLIMpus` is an actively maintained Python framework for modelling line intensity mapping (LIM) signals during cosmic dawn and the epoch of reionization. It computes **non-linear auto- and cross-power spectra** of star-forming lines analytically, in milliseconds, and generates **coeval boxes** and **lightcones** from the same model.
 
-The 21-cm signal is introduced by interfacing oLIMpus with [`Zeus21`](https://github.com/JulianBMunoz/Zeus21), a public code for 21-cm signal modeling at cosmic dawn. A version of `Zeus21` is included in this repository as a submodule. Note that the original `Zeus21` currently models only the power spectrum during cosmic dawn; support for the reionization era is under active development.
+The 21-cm signal comes from [`Zeus21`](https://github.com/ZeusCosmo/Zeus21). **In v2 this is an ordinary dependency, not a vendored copy** — see [Installation](#️-installation).
 
 ---
 
 <p align="center">
-  <img src="oLIMpus/flowchart.jpeg" alt="oLIMpus Flowchart" width="100%"/>
+  <img src="oLIMpus/flowchart.png" alt="oLIMpus Flowchart" width="100%"/>
 </p>
+
+---
+
+## 🆕 What changed in v2
+
+| | v1 | v2 |
+|---|---|---|
+| Zeus21 | vendored under `oLIMpus/zeus21_local/` | ordinary dependency, branch `zeus21_hack` |
+| `LIM_modeling.py` | — | renamed **`coefficients_LIM.py`** |
+| `LIM_luminosities.py` | — | renamed **`luminosities_LIM.py`** |
+| burstiness | notebook patches | **`burstiness_LIM.py`**, in the package |
+| version number | hard-coded in `setup.py` | derived from `VERSION` + git history |
 
 ---
 
 ## ⚙️ Installation
 
-We recommend creating a new virtual environment based on **python 3.10** when installing the code, to avoid dependency conflicts.
-If you don't have [`CLASS`](https://github.com/lesgourg/class_public/) installed in your laptop, first run these lines (modifying the Makefile to your `gcc` as needed):
-```
+We recommend a fresh environment based on **python 3.10** or newer.
+
+If you do not already have [`CLASS`](https://github.com/lesgourg/class_public/), install it first (adapting the Makefile to your `gcc`):
+
+```bash
 git clone https://github.com/lesgourg/class_public.git class
 cd class/
 make
 cd python/
-python setup.py install --user
+pip install .
 ```
 
-To install `oLIMpus`, if you have **conda** in your laptop you can simply run the **setup.sh** file through
-```bash
-  chmod 755 setup_env.sh 
-  ./setup_env.sh
-```
-This will create the conda environment **oLIMpus**, install the code and all dependencies, and install jupyter to run the notebooks. 
+Then, from the directory where you cloned oLIMpus:
 
-Otherwise, you can run the installation in the folder where you downloaded the repository, through:
 ```bash
 pip install .
 ```
 
+This pulls in `Zeus21` from the **`zeus21_hack`** branch automatically — it is declared in `install_requires` as a PEP 508 direct reference. oLIMpus v2 will not work against `main`.
+
+For development, install in editable mode so the version number tracks your commits:
+
+```bash
+pip install -e .
+```
+
+If you use **conda**:
+
+```bash
+chmod 755 setup_env.sh
+./setup_env.sh
+```
+
+which creates the `oLIMpus` environment, installs the code and its dependencies, and adds a jupyter kernel for the tutorials.
+
+`make init`, `make install`, `make dev`, `make version` and `make clean` wrap the same commands.
+
 ---
 
-> ⚠️ Note
+## 🔧 Modules
 
-> oLIMpus includes its own version of Zeus21 as a submodule, last updated in June 2025; later versions of Zeus21 may introduce changes that are not compatible with this code. If, for some reason, you want to run oLIMpus with a different Zeus21 version, contact us to verify differences between various versions.
+- **`inputs_LIM.py`**
+  `Line_Parameters`: the line and its model, the smoothing radius `R0`, the observable (`Inu` or `Tnu`), shot noise, the lognormal order, luminosity scatter, and the burstiness parameters.
 
-> The authors are committed to keep the two codes updated and compatible once new milestones are reached on one side or the other. 
+- **`luminosities_LIM.py`**
+  `L(Mh, z)` or `L(SFR, z)` models, dispatched by name: `Yang24`, `THESAN21`, `Lagache18`, `Li16`, `Yang21`, `COMAP_fiducial`, `powerlaw_SFR`, `JWST_calibrated`. Lines: OIII (5007, 4960, 4364), OII, Ha, Hb, CII, CO(1-0), CO(2-1).
 
----
+- **`coefficients_LIM.py`**
+  `get_LIM_coefficients`: `sigma_R0(z)`, the EPS conditional HMF, the lognormal coefficients `gamma_R` and `gamma_R^NL` in both Lagrangian and Eulerian space, `phi_LtoE`, the mean intensity `Inu_bar(z)` and the shot noise.
 
-## 🔧 Included Modules
+- **`burstiness_LIM.py`** *(new)*
+  The Ornstein–Uhlenbeck burstiness model of [arXiv:2605.13967](https://arxiv.org/abs/2605.13967): `V_lambda` (Eq. 5) and `V_12` (Eqs. 8–9) in closed form, the shot-noise boost `1 + V_lambda`, and the cross-line coefficient `R_12` (Eq. 11). Switched on with `Line_Parameters(BURSTY_FLAG=True)`.
 
-- **`inputs_LIM.py`**  
-  Set the input parameters to compute the line luminosity and to set the properties of the power spectrum (e.g., linear/quadratic lognormal, with/without shot noise, with/without RSD).
+- **`correlations_LIM.py`**
+  `Power_Spectra_LIM`: the two-point function of two lognormals, the Hankel transform to `P_nu(k, z)`, Kaiser RSD, Fingers-of-God, the shot-noise window, and line-line cross spectra.
 
-- **`LIM_luminosities.py`**  
-  Default models for the line luminoisty-SFR or -halo mass relations. Default includes models for OIII, OII, Ha, Hb, CII, CO21.
+- **`maps_LIM.py`**
+  `CoevalBox_LIM_analytical` (fast, lognormal), `CoevalBox_percell` (the slow cell-by-cell benchmark), `generate_asym_boxes` for non-cubic geometries, and `build_lightcone`.
 
-- **`LIM_modeling.py`**  
-  Compute the quantities needed to setup the model (e.g., the line luminosity density and the coefficients of the lognormal).
-
-- **`correlations_LIM.py`**  
-  Computes auto- and cross-power spectra of various emission lines, including astrophysical nonlinearities, redshift-space distortions, shot noise.
-
-- **`analysis.py`**  
-  Fiducial setup, create a collective class to run oLIMpus and Zeus21 and get consistent outputs.
-
-- **`maps_LIM.py`**  
-  Functions required to produce coeval maps and lightcones.
-
-- **`zeus21_local/zeus21/`** (submodule)  
-  Modified version of [`Zeus21`](https://github.com/zeus21/zeus21) used to compute 21-cm power spectra and fields during cosmic dawn (reionization modeling in progress). For details, see Zeus21 official documentation. 
+- **`analysis.py`**
+  `run_oLIMpus`: a convenience wrapper that runs the line and 21-cm calculations together. It rebuilds CLASS on every call — for parameter scans, build the cosmology once and call the classes directly, as the tutorials do.
 
 ---
 
 ## 📚 Tutorials
 
-The following notebooks and scripts will help you get started:
+In `Tutorials/`, in order:
 
-- **`#1 oLIMpus.ipynb`** – Compute and visualize the LIM and 21-cm auto- and cross-power spectra  
-- **`#2 boxes_and_lightcones.ipynb`** – Create coeval boxes and lightcones 
-- **`#3 explore_parameters.ipynb`** – Explore how the LIM power spectrum depends on different parameters   
-
-> 📌 You can find all tutorials in the `Tutorials/` folder.
+- **`#1: oLIMpus.ipynb`** — the LIM and 21-cm auto- and cross-power spectra, and how the pieces fit together
+- **`#2: boxes_and_lightcones.ipynb`** — coeval boxes, the cell-by-cell benchmark, lightcones
+- **`#3: explore_parameters.ipynb`** — how the power spectrum responds to the astrophysical and line parameters
+- **`#4: EoR_correlation.ipynb`** — the line × 21-cm correlation through cosmic dawn and reionization
+- **`#5: burstiness.ipynb`** — the burstiness model and the shot-noise boost
 
 ---
 
 ## 📄 Relevant Publications
 
-- Libanore, Mu&ntilde;oz and Kovetz, *oLIMpus: An Effective Model for Line Intensity Mapping Auto- and Cross- Power Spectra in Cosmic Dawn and Reionization*, [arXiv:2507.15922](https://arxiv.org/abs/2507.15922)
+- Libanore, Mu&ntilde;oz and Kovetz, *oLIMpus: An Effective Model for Line Intensity Mapping Auto- and Cross-Power Spectra in Cosmic Dawn and Reionization*, [arXiv:2507.15922](https://arxiv.org/abs/2507.15922)
 
-- Libanore, Kovetz, Mu&ntilde;oz, Sklansky, Thélie, *A New Boundary Condition on Reionization*,[arXiv:2509.08886](https://arxiv.org/abs/2509.08886)
+- Kovetz, Lazare, Libanore, Mu&ntilde;oz, Vanzan, *When galaxies burst: enhanced shot-noise for line-intensity mapping in the JWST era*, [arXiv:2605.13967](https://arxiv.org/abs/2605.13967)
+
+- Libanore, Kovetz, Mu&ntilde;oz, Sklansky, Th&eacute;lie, *A New Boundary Condition on Reionization*, [arXiv:2509.08886](https://arxiv.org/abs/2509.08886)
+
+- Sklansky et al., *In preparation*
 
 - Mu&ntilde;oz, *An Effective Model for the Cosmic-Dawn 21-cm Signal*, [arXiv:2302.08506](https://arxiv.org/abs/2302.08506)
-
-- Sklanksy et al., *In preparation*
 
 - Cruz, Mu&ntilde;oz, Sabti and Kamionkowski, *The First Billion Years in Seconds: An Effective Model for the 21-cm Signal with Population III Stars*, [arXiv:2407.18294](https://arxiv.org/abs/2407.18294)
 
@@ -105,10 +126,8 @@ The following notebooks and scripts will help you get started:
 
 ## 📬 Contact
 
-For questions, suggestions, or help using the code, please contact:
-
-**Sarah Libanore**  
-📧 [libanore@bgu.ac.il](mailto:libanore@bgu.ac.il)  
+**Sarah Libanore**
+📧 [libanore@bgu.ac.il](mailto:libanore@bgu.ac.il)
 
 ---
 
