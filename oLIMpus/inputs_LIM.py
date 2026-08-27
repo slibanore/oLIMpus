@@ -1,3 +1,4 @@
+
 """
 Takes inputs for LIM and stores them in useful classes
 
@@ -6,11 +7,11 @@ BGU - June 2026
 """
 
 
-# all the imports you will need throughtout the run 
+# all the imports you will need throughtout the run
 from zeus21 import constants, cosmology, sfrd, z21_utilities, reionization, inputs
 import astropy.constants as cu
 import astropy.units as u
-import numpy as np 
+import numpy as np
 from scipy.integrate import simpson
 from scipy.stats import lognorm
 from scipy.interpolate import interp1d
@@ -21,10 +22,10 @@ import powerbox as pbox
 from tqdm import trange, tqdm
 import pickle
 import os
-from matplotlib import colors as cc 
+from matplotlib import colors as cc
 import matplotlib.cm as cm
 from matplotlib.colors import LogNorm
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
 
 from dataclasses import dataclass, field as _field, InitVar
 
@@ -35,21 +36,57 @@ class Line_Parameters:
 
     Parameters
     ----------
-    LINE: str 
-        Which line to compute. Available choices: "OIII5007" (same as "OIII"), "OIII4960", "OIII4364", "OII", "Ha", "Hb", "CII", "CO21", "CO10", "SFRD"        
-    LINE_MODEL: str 
+    LINE: str
+        Which line to compute. Available choices: "OIII5007" (same as "OIII"), "OIII4960", "OIII4364", "OII", "Ha", "Hb", "CII", "CO21", "CO10", "SFRD"
+    LINE_MODEL: str
         How to compute the line luminosity. Can pass the name of any of the functions in luminosities_LIM.py
-    OBSERVABLE_LIM: str 
+    OBSERVABLE_LIM: str
         Whether to compute the line intensity in Jy/sr (if "Inu") or the brightness temperature in uK (if "Tnu")
     _R: float
         Scale below which the astrophysical model cannot be trusted (the local process is computed inside a sphere with this radius). Has to be larger than MIN_R_NONLINEAR in UserParams (see inputs.py in Zeus21)
     shot_noise: bool
         Whether to include shot noise in the LIM power spectrum calculation, default True
-    quadratic_rhoL: bool 
-        Whether to include the second order in the lognormal expansion of the luminosity density wrt the density field, default True 
+    quadratic_rhoL: bool
+        Whether to include the second order in the lognormal expansion of the luminosity density wrt the density field, default True
+    normalize_CEPS: bool
+        Divide the EPS ratio of Eq. 6 (arXiv:2507.15922) by its own Gaussian average over
+        delta_R, so that <C_EPS>_delta = dn/dMh exactly and Eq. 8 holds as written. The
+        paragraph under Eq. 5 states this identity; it is exact only for a_ST = 1 and is
+        broken by a_ST = 0.707, which costs 34% of rho_L at R0 = 1 Mpc and 61% at 0.5 Mpc.
+        Default True. Set False to reproduce v1 and the arXiv:2507.15922 figures, keeping
+        in mind that those were produced with the sigma_R^4 phi_LtoE as well.
+        Halos with sigma_M < sigma_R are excluded from the conditional HMF at any setting.
     stoch_type: str
-        Whether to anchor the stochastic enhancement to the mean ("mean") or on the median ("median")
-        TODO: Add burstiness option from 2605.13967
+        Whether to anchor the stochastic enhancement to the mean ("mean") or on the median ("median").
+        Ignored when BURSTY_FLAG is True, which requires the mean-anchored convention.
+    BURSTY_FLAG: bool
+        Replace the phenomenological lognormal scatter by the physical burstiness model of
+        arXiv:2605.13967: the SFR at fixed halo mass is a mean-anchored lognormal driven by an
+        Ornstein-Uhlenbeck process of amplitude sigma_PS(Mh) and coherence time tau_PS, convolved
+        with the line's stellar-population-synthesis window of effective width t_Myr_per_line.
+        Only the shot noise changes; the mean intensity and the clustering term are untouched.
+        See burstiness_LIM.py.
+    sigPS_piv_bursty, log10M_piv_bursty, dsigPS_dlog10M_bursty: float
+        M26 (arXiv:2601.07912) parametrisation of the rms log-SFR scatter,
+        sigma_PS(Mh) = sigPS_piv + dsigPS_dlog10M * (log10 Mh - log10M_piv).
+        Defaults are the central values quoted in arXiv:2605.13967:
+        sigma_PS(1e11 Msun) = 2.0, dsigma/dlog10Mh = -0.5.
+    sigPS_min_bursty, sigPS_max_bursty: float or None
+        Clamps on sigma_PS(Mh). The floor keeps the extrapolation to high mass positive; the
+        ceiling (None by default) lets you test the regime sigma_PS >~ 3, where the paper warns
+        that the lognormal description of the SFR PDF is expected to break down.
+    tauPS_Myr_bursty: float
+        Burst coherence time in Myr. A property of the star-formation process, so it must be the
+        same for every line in a cross-correlation. Default 25 Myr (M26 central value).
+    t_Myr_per_line: float or None
+        Effective top-hat width of the line's SPS Green's function, in Myr. None (default) takes
+        the per-line value of Table I of arXiv:2605.13967. Note the values for [OIII], [OII] and
+        Hbeta are ASSUMED equal to the Halpha one (7 Myr): all are nebular lines responding to
+        ionizing photons on the same few-Myr timescale, but this has not been calibrated.
+    sigma_extra_dex: float
+        Scatter in L at fixed Mh that is NOT burstiness (dust, geometry, central-satellite
+        splits, Lyman-alpha radiative transfer), in dex. Multiplies the second moment by
+        exp((sigma_extra ln10)^2); see burstiness_LIM._extra_scatter_factor for the assumption.
     sigma_LMh_dex: float = 0.
         Deterministic rms normal scatter in dex, CONSTANT in redshift.
     sigma_LMh_dex_of_z: callable or None
@@ -62,12 +99,12 @@ class Line_Parameters:
         the luminosity-density and shot-noise integrands gives an (nz, 1)
         column.
     line_dict: dict
-        Dictionary containing all the quantities required to estimate the line luminosity (see at the bottom of this file) 
+        Dictionary containing all the quantities required to estimate the line luminosity (see at the bottom of this file)
 
     Attributes
     ----------
     lambda_line: float
-        Rest-frame wavelenght of the line in Angstrom 
+        Rest-frame wavelenght of the line in Angstrom
     nu_line: float
         Rest-frame frequency of the line in Hz
     """
@@ -82,18 +119,23 @@ class Line_Parameters:
     _R: float = 0.5
     shot_noise: bool = True
     quadratic_rhoL: bool = True
+    normalize_CEPS: bool = True
 
     stoch_type: str = "mean"
     sigma_LMh_dex: float = 0.
     sigma_LMh_dex_of_z: object = None
-    sigPS_piv_bursty: float = 2.
-    log10M_piv_bursty: float = 11
-    sigPS_cap_bursty: float = 0.25
-    dsigPS_dlog10M_bursty: float = -0.5
-    tauPS_Myr_bursty: float = 25.
+    sigma_extra_dex: float = 0.
 
-    line_dict: dict = None   
-    t_Myr_per_line: float = _field(init=False)
+    # --- burstiness, arXiv:2605.13967 with the M26 (arXiv:2601.07912) amplitudes --- #
+    sigPS_piv_bursty: float = 2.
+    log10M_piv_bursty: float = 11.
+    dsigPS_dlog10M_bursty: float = -0.5
+    sigPS_min_bursty: float = 0.1       # floor (was misleadingly called sigPS_cap_bursty)
+    sigPS_max_bursty: object = None     # optional ceiling, for the sigma_PS >~ 3 test
+    tauPS_Myr_bursty: float = 25.
+    t_Myr_per_line: float = None        # None -> per-line default from Table I
+
+    line_dict: dict = None
     sigma_LMh: float = _field(init=False)
 
     def __post_init__(self):
@@ -107,39 +149,30 @@ class Line_Parameters:
             "stoch_type": (str, {"mean", "median"}),
         }
         inputs.validate_fields(self, schema)
-        
-        if self.LINE == 'OIII4960':
-            self.lambda_line = 4960*u.AA 
-            self.t_Myr_per_line = 7.
-        elif self.LINE == 'OIII5007' or self.LINE == 'OIII':
-            self.lambda_line = 5007*u.AA 
-            self.t_Myr_per_line = 7.
-        elif self.LINE == 'OII':
-            self.lambda_line = 3727.29*u.AA 
-            self.t_Myr_per_line = 7.
-        elif self.LINE == 'Ha':
-            self.lambda_line = 6563*u.AA
-            self.t_Myr_per_line = 7.
-        elif self.LINE == 'Hb':
-            self.lambda_line = 4861*u.AA 
-            self.t_Myr_per_line = 7.
 
-        elif self.LINE == 'CII':
-            self.lambda_line = 1.58e6*u.AA 
-            self.t_Myr_per_line = 50.
+        # Rest wavelength, and the effective SPS window width t_lambda used by the
+        # burstiness module (Table I of arXiv:2605.13967). t_Myr_per_line is only
+        # filled in when the user did not set it explicitly.
+        _t_default = {
+            'OIII4960': 7., 'OIII5007': 7., 'OIII': 7., 'OIII4364': 7.,
+            'OII': 7., 'Ha': 7., 'Hb': 7.,
+            'CII': 50., 'CO21': 80., 'CO10': 80., 'SFRD': 100.,
+        }
+        _lambda = {
+            'OIII4960': 4960., 'OIII5007': 5007., 'OIII': 5007.,
+            # [O III] 1S0 -> 1D2 auroral line: 4363.21 A (air) / 4364.44 A (vacuum).
+            # NOTE the module mixes conventions across lines (Ha 6563 and Hb 4861 are
+            # air values); the spread is <0.05% in nu_rest, i.e. irrelevant for c1_LIM,
+            # but the convention should be stated once and applied to all lines.
+            'OIII4364': 4364.44,
+            'OII': 3727.29, 'Ha': 6563., 'Hb': 4861.,
+            'CII': 1.58e6, 'CO21': 1.3e7, 'CO10': 2.6e7, 'SFRD': 1.,
+        }
+        self.lambda_line = _lambda[self.LINE] * u.AA
+        if self.t_Myr_per_line is None:
+            self.t_Myr_per_line = _t_default[self.LINE]
 
-        elif self.LINE == 'CO21': # 2-1 transition
-            self.lambda_line = 1.3e7*u.AA 
-            self.t_Myr_per_line = 80.
-        elif self.LINE == 'CO10': # 1-0 transition
-            self.lambda_line = 2.6e7*u.AA 
-            self.t_Myr_per_line = 80.
-
-        elif self.LINE == 'SFRD':
-            self.lambda_line = 1.*u.AA 
-            self.t_Myr_per_line = 100.
-
-        self.nu_rest = (cu.c / (self.lambda_line)).to(u.Hz) 
+        self.nu_rest = (cu.c / (self.lambda_line)).to(u.Hz)
 
         self.sigma_LMh = self.sigma_LMh_dex * np.log(10.0)
 
@@ -160,11 +193,11 @@ Define dictionaries containing default parameters for the models in luminosities
 """
 
 ########################################################
-### UV AND OPTICAL 
+### UV AND OPTICAL
 ########################################################
 
 # Yang24: arXiv:2409.03997v2, table 2
-# THESAN21: arXiv:2111.02411, table 2 
+# THESAN21: arXiv:2111.02411, table 2
 
 # OIII lines
 Yang24_OIII5007_params = {
@@ -192,9 +225,9 @@ THESAN21_OIII_params = {
     'a': 7.84,
     'ma': 1.24,
     'mb': 1.19,
-    'mc': 0.53, 
+    'mc': 0.53,
     'log10_SFR_b': 0.,
-    'log10_SFR_c': 0.66, 
+    'log10_SFR_c': 0.66,
     }
 
 # OII line
@@ -209,9 +242,9 @@ THESAN21_OII_params = {
     'a': 7.08,
     'ma': 1.11,
     'mb': 1.31,
-    'mc': 0.64, 
+    'mc': 0.64,
     'log10_SFR_b': 0.,
-    'log10_SFR_c': 0.54, 
+    'log10_SFR_c': 0.54,
     }
 
 # Ha line
@@ -226,9 +259,9 @@ THESAN21_Ha_params = {
     'a': 8.08,
     'ma': 0.96,
     'mb': 0.88,
-    'mc': 0.45, 
+    'mc': 0.45,
     'log10_SFR_b': 0.,
-    'log10_SFR_c': 0.96, 
+    'log10_SFR_c': 0.96,
     }
 
 # Hb line
@@ -243,9 +276,9 @@ THESAN21_Hb_params = {
     'a': 7.62,
     'ma': 0.96,
     'mb': 0.86,
-    'mc': 0.41, 
+    'mc': 0.41,
     'log10_SFR_b': 0.,
-    'log10_SFR_c': 0.96, 
+    'log10_SFR_c': 0.96,
     }
 
 ########################################################
@@ -295,38 +328,38 @@ Yang21_CO10_params = {
     'A':1.
 }
 
-# COMAP fiducial 
+# COMAP fiducial
 # generic CO line
 
 COMAP_pessimistic_params = {
-    'A': -3.7, 
-    'B': 7.0, 
-    'C': 11.1, 
-    'Ms': 12.5, 
+    'A': -3.7,
+    'B': 7.0,
+    'C': 11.1,
+    'Ms': 12.5,
     'sigma': 0.36
 }
 
 COMAP_realistic_params = {
-    'A': -2.75, 
-    'B': 0.05, 
-    'C': 10.61, 
-    'Ms': 12.3, 
+    'A': -2.75,
+    'B': 0.05,
+    'C': 10.61,
+    'Ms': 12.3,
     'sigma': 0.42
 }
 
 COMAP_realisticplus_params = {
-    'A': -2.85, 
-    'B': -0.42, 
-    'C': 10.63, 
-    'Ms': 12.3, 
+    'A': -2.85,
+    'B': -0.42,
+    'C': 10.63,
+    'Ms': 12.3,
     'sigma': 0.42
 }
 
 COMAP_optimistic_params = {
-    'A': -2.4, 
-    'B': -0.5, 
-    'C': 10.45, 
-    'Ms': 12.21, 
+    'A': -2.4,
+    'B': -0.5,
+    'C': 10.45,
+    'Ms': 12.21,
     'sigma': 0.36
 }
 
